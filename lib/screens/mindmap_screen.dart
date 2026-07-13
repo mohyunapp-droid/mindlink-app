@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -2396,6 +2397,122 @@ class _NodeSearchDialogState extends State<_NodeSearchDialog> {
   }
 }
 
+// 올가미 선택 상태
+class _LassoState extends ChangeNotifier {
+  List<Offset> points = [];
+  bool complete = false;
+  List<int> selectedIndices = [];
+  Offset? centroid;
+  bool moving = false;
+
+  void startLasso(Offset p) {
+    points = [p];
+    complete = false;
+    selectedIndices = [];
+    centroid = null;
+    moving = false;
+    notifyListeners();
+  }
+
+  void addPoint(Offset p) {
+    points.add(p);
+    notifyListeners();
+  }
+
+  void completeSelection(List<int> selected, Offset c) {
+    complete = true;
+    selectedIndices = selected;
+    centroid = c;
+    notifyListeners();
+  }
+
+  void stopMoving() {
+    moving = false;
+    notifyListeners();
+  }
+
+  void reset() {
+    points = [];
+    complete = false;
+    selectedIndices = [];
+    centroid = null;
+    moving = false;
+    notifyListeners();
+  }
+
+  void moveDelta(List<Stroke> allStrokes, Offset delta) {
+    for (final idx in selectedIndices) {
+      if (idx < allStrokes.length) {
+        final pts = allStrokes[idx].points;
+        for (var i = 0; i < pts.length; i++) {
+          pts[i] = pts[i] + delta;
+        }
+      }
+    }
+    if (centroid != null) centroid = centroid! + delta;
+    notifyListeners();
+  }
+}
+
+// 드로잉 상태만 분리 — ChangeNotifier로 캔버스만 repaint, 전체 rebuild 없음
+class _DrawingState extends ChangeNotifier {
+  final List<Stroke> strokes;
+  Stroke? currentStroke;
+
+  _DrawingState(this.strokes);
+
+  void startStroke(Stroke s) {
+    currentStroke = s;
+    notifyListeners();
+  }
+
+  void addPoint(Offset p) {
+    currentStroke?.points.add(p);
+    notifyListeners();
+  }
+
+  void updateStraightLine(Offset start, Offset end) {
+    final pts = currentStroke?.points;
+    if (pts == null) return;
+    pts.clear();
+    pts.add(start);
+    pts.add(end);
+    notifyListeners();
+  }
+
+  void finishStroke() {
+    if (currentStroke == null) return;
+    strokes.add(currentStroke!);
+    currentStroke = null;
+    notifyListeners();
+  }
+
+  void cancelStroke() {
+    currentStroke = null;
+    notifyListeners();
+  }
+
+  void eraseAt(Offset position, double radius) {
+    final before = strokes.length;
+    strokes.removeWhere((stroke) =>
+        stroke.points.any((pt) => (pt - position).distance < radius));
+    if (strokes.length != before) notifyListeners();
+  }
+
+  void undo() {
+    if (strokes.isNotEmpty) {
+      strokes.removeLast();
+      notifyListeners();
+    }
+  }
+
+  void clear() {
+    strokes.clear();
+    currentStroke = null;
+    notifyListeners();
+  }
+}
+
 class _NoteEditorScreen extends StatefulWidget {
   final List<Stroke>? initialStrokes;
   final String initialName;
@@ -2422,16 +2539,17 @@ class _EditorImage {
 }
 
 class _NoteEditorScreenState extends State<_NoteEditorScreen> {
-  late List<Stroke> _strokes;
+  late _DrawingState _drawing;
   late TextEditingController _nameController;
   bool _erasing = false;
   bool _highlighting = false;
   bool _straightLine = false;
-  bool _drawingEnabled = true;  // false면 드로잉 비활성 — 이미지 선택 모드
+  bool _drawingEnabled = true;
+  bool _lassoMode = false;
+  late _LassoState _lassoState;
   double _strokeWidth = 4.0;
   Color _penColor = Colors.black;
   Offset? _straightLineStart;
-  Stroke? _currentStroke;
   bool _pointerOnImage = false;
   bool _imageSelected = false;
   final List<_EditorImage> _images = [];
@@ -2440,11 +2558,13 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   @override
   void initState() {
     super.initState();
-    _strokes = widget.initialStrokes != null
+    final strokes = widget.initialStrokes != null
         ? widget.initialStrokes!
             .map((s) => Stroke(color: s.color, width: s.width, points: List.of(s.points)))
             .toList()
-        : [];
+        : <Stroke>[];
+    _drawing = _DrawingState(strokes);
+    _lassoState = _LassoState();
     _nameController = TextEditingController(text: widget.initialName);
     if (widget.initialImages != null) {
       for (final img in widget.initialImages!) {
@@ -2453,17 +2573,19 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _drawing.dispose();
+    _lassoState.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadExistingImage(NoteImage noteImage) async {
     final codec = await ui.instantiateImageCodec(noteImage.bytes);
     final frame = await codec.getNextFrame();
     if (!mounted) return;
     setState(() => _images.add(_EditorImage(noteImage: NoteImage(bytes: noteImage.bytes, rect: noteImage.rect), decoded: frame.image)));
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
   }
 
   Future<void> _setBackgroundImage(Uint8List bytes) async {
@@ -2507,20 +2629,45 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     }
   }
 
+  // 팜 리젝션: 첫 번째 포인터만 드로잉에 사용, 나머지는 무시
+  int? _activePointerId;
+
   void _onPointerDown(PointerDownEvent event) {
+    // 이미 다른 포인터가 드로잉 중이면 무시 (손바닥 차단)
+    if (_activePointerId != null && _activePointerId != event.pointer) return;
+    _activePointerId = event.pointer;
     final pos = event.localPosition;
+
+    // 올가미 모드
+    if (_lassoMode) {
+      if (_lassoState.complete) {
+        // 이동 핸들 근처 탭 → 이동 시작
+        if (_lassoState.centroid != null &&
+            (_lassoState.centroid! - pos).distance < 44) {
+          _lassoState.moving = true;
+          return;
+        }
+        // 다른 곳 탭 → 초기화 후 새 올가미
+        _lassoState.reset();
+      }
+      _lassoState.startLasso(pos);
+      return;
+    }
+
     // 드로잉 비활성 상태 → 이미지 편집 중이면 빈 캔버스 탭으로 해제
     if (!_drawingEnabled) {
       if (_imageSelected) {
         final onAnyImage = _images.any((img) => img.rect.contains(pos));
         if (!onAnyImage) setState(() { _imageSelected = false; _selectedImageIndex = -1; });
       }
+      _activePointerId = null;
       return;
     }
     // 선택 모드 이미지 위 → 드로잉 차단
     if (_imageSelected && _selectedImageIndex >= 0 &&
         _images[_selectedImageIndex].rect.contains(pos)) {
       setState(() => _pointerOnImage = true);
+      _activePointerId = null;
       return;
     }
     // 선택 모드에서 다른 이미지 탭 → 그 이미지 선택
@@ -2528,108 +2675,135 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       final idx = _images.indexWhere((img) => img.rect.contains(pos));
       if (idx >= 0) {
         setState(() { _selectedImageIndex = idx; _pointerOnImage = true; });
+        _activePointerId = null;
         return;
       }
       // 빈 캔버스 탭 → 고정
-      setState(() { _imageSelected = false; _selectedImageIndex = -1; _pointerOnImage = false; });
+      setState(() { _imageSelected = false; _selectedImageIndex = -1; });
+      _pointerOnImage = false;
     } else {
-      setState(() => _pointerOnImage = false);
+      _pointerOnImage = false;
     }
     if (_erasing) {
-      _eraseAt(event.localPosition);
+      _drawing.eraseAt(event.localPosition, 20.0);
       return;
     }
     final color = _highlighting ? _penColor.withValues(alpha: 0.35) : _penColor;
     final width = _highlighting ? _strokeWidth * 4 : _strokeWidth;
     if (_straightLine) {
-      setState(() {
-        _straightLineStart = event.localPosition;
-        _currentStroke = Stroke(color: color, width: width)
-          ..points.add(event.localPosition)
-          ..points.add(event.localPosition);
-      });
+      _straightLineStart = event.localPosition;
+      _drawing.startStroke(Stroke(color: color, width: width)
+        ..points.add(event.localPosition)
+        ..points.add(event.localPosition));
     } else {
-      setState(() {
-        _currentStroke = Stroke(color: color, width: width);
-        _currentStroke!.points.add(event.localPosition);
-      });
+      _drawing.startStroke(Stroke(color: color, width: width)
+        ..points.add(event.localPosition));
     }
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    if (_activePointerId != null && _activePointerId != event.pointer) return;
+
+    // 올가미 모드
+    if (_lassoMode) {
+      if (_lassoState.complete && _lassoState.moving) {
+        _lassoState.moveDelta(_drawing.strokes, event.delta);
+        return;
+      }
+      if (!_lassoState.complete) {
+        _lassoState.addPoint(event.localPosition);
+      }
+      return;
+    }
+
     if (!_drawingEnabled) return;
     if (_pointerOnImage) return;
     if (_erasing) {
-      _eraseAt(event.localPosition);
+      _drawing.eraseAt(event.localPosition, 20.0);
       return;
     }
-    if (_currentStroke == null) return;
+    if (_drawing.currentStroke == null) return;
     if (_straightLine && _straightLineStart != null) {
-      setState(() {
-        _currentStroke!.points
-          ..clear()
-          ..add(_straightLineStart!)
-          ..add(event.localPosition);
-      });
+      _drawing.updateStraightLine(_straightLineStart!, event.localPosition);
     } else {
-      setState(() => _currentStroke!.points.add(event.localPosition));
+      _drawing.addPoint(event.localPosition);
     }
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    if (_activePointerId == event.pointer) _activePointerId = null;
+
+    // 올가미 모드
+    if (_lassoMode) {
+      if (_lassoState.moving) {
+        _lassoState.stopMoving();
+        return;
+      }
+      if (!_lassoState.complete && _lassoState.points.length > 15) {
+        final first = _lassoState.points.first;
+        final last = _lassoState.points.last;
+        if ((first - last).distance < 50) {
+          _closeLasso();
+        } else {
+          _lassoState.reset();
+        }
+      } else if (!_lassoState.complete) {
+        _lassoState.reset();
+      }
+      return;
+    }
+
+    if (_activePointerId != null) return;
     setState(() => _pointerOnImage = false);
-    if (_currentStroke == null) return;
-    setState(() {
-      _strokes.add(_currentStroke!);
-      _currentStroke = null;
-      _straightLineStart = null;
-    });
+    _drawing.finishStroke();
+    _straightLineStart = null;
   }
 
-  void _eraseAt(Offset position) {
-    const eraseRadius = 20.0;
-    final newStrokes = <Stroke>[];
+  void _onPointerCancel(PointerCancelEvent event) {
+    // iOS가 제스처를 취소할 때 pointerUp 대신 cancel을 보냄 → 잠금 해제
+    if (_activePointerId == event.pointer) _activePointerId = null;
+    if (_lassoMode) {
+      _lassoState.reset();
+      return;
+    }
+    _drawing.cancelStroke();
+    _straightLineStart = null;
+  }
 
-    for (final stroke in _strokes) {
-      var current = <Offset>[];
-      for (final point in stroke.points) {
-        if ((point - position).distance < eraseRadius) {
-          if (current.length >= 2) {
-            newStrokes.add(Stroke(
-              color: stroke.color,
-              width: stroke.width,
-              points: List.of(current),
-            ));
-          }
-          current = [];
-        } else {
-          current.add(point);
-        }
-      }
-      if (current.length >= 2) {
-        newStrokes.add(Stroke(
-          color: stroke.color,
-          width: stroke.width,
-          points: List.of(current),
-        ));
+  void _closeLasso() {
+    final points = _lassoState.points;
+    if (points.length < 3) { _lassoState.reset(); return; }
+
+    final selected = <int>[];
+    for (var i = 0; i < _drawing.strokes.length; i++) {
+      final stroke = _drawing.strokes[i];
+      if (stroke.points.any((p) => _pointInPolygon(p, points))) {
+        selected.add(i);
       }
     }
 
-    setState(() {
-      _strokes
-        ..clear()
-        ..addAll(newStrokes);
-    });
+    final cx = points.fold(0.0, (s, p) => s + p.dx) / points.length;
+    final cy = points.fold(0.0, (s, p) => s + p.dy) / points.length;
+    _lassoState.completeSelection(selected, Offset(cx, cy));
   }
 
-  void _undo() {
-    if (_strokes.isEmpty) return;
-    setState(() => _strokes.removeLast());
+  bool _pointInPolygon(Offset point, List<Offset> polygon) {
+    int crossings = 0;
+    for (int i = 0; i < polygon.length; i++) {
+      final a = polygon[i];
+      final b = polygon[(i + 1) % polygon.length];
+      if ((a.dy <= point.dy && b.dy > point.dy) ||
+          (b.dy <= point.dy && a.dy > point.dy)) {
+        final t = (point.dy - a.dy) / (b.dy - a.dy);
+        if (point.dx < a.dx + t * (b.dx - a.dx)) crossings++;
+      }
+    }
+    return crossings.isOdd;
   }
 
-  void _clear() {
-    setState(() => _strokes.clear());
-  }
+  void _undo() => _drawing.undo();
+
+  void _clear() => _drawing.clear();
 
   Widget _toolBtn(BuildContext context, {
     required IconData icon,
@@ -2688,7 +2862,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
               Navigator.pop(
                 context,
                 (
-                  strokes: _strokes,
+                  strokes: _drawing.strokes,
                   name: name.isEmpty ? '메모' : name,
                   images: _images.map((e) => NoteImage(bytes: e.bytes, rect: e.rect)).toList(),
                 ),
@@ -2712,6 +2886,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                         active: _drawingEnabled && !_erasing && !_straightLine,
                         onTap: () => setState(() {
                           _imageSelected = false; _selectedImageIndex = -1;
+                          _lassoMode = false; _lassoState.reset();
                           if (_drawingEnabled && !_erasing && !_straightLine) {
                             _drawingEnabled = false;
                           } else {
@@ -2723,6 +2898,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                         active: _drawingEnabled && !_erasing && _straightLine,
                         onTap: () => setState(() {
                           _imageSelected = false; _selectedImageIndex = -1;
+                          _lassoMode = false; _lassoState.reset();
                           if (_drawingEnabled && !_erasing && _straightLine) {
                             _drawingEnabled = false;
                           } else {
@@ -2735,6 +2911,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                         activeColor: Theme.of(context).colorScheme.tertiary,
                         onTap: () => setState(() {
                           _imageSelected = false; _selectedImageIndex = -1;
+                          _lassoMode = false; _lassoState.reset();
                           _highlighting = !_highlighting;
                         }),
                       ),
@@ -2742,10 +2919,28 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                         active: _drawingEnabled && _erasing,
                         onTap: () => setState(() {
                           _imageSelected = false; _selectedImageIndex = -1;
+                          _lassoMode = false; _lassoState.reset();
                           if (_drawingEnabled && _erasing) {
                             _drawingEnabled = false;
                           } else {
                             _drawingEnabled = true; _erasing = true; _straightLine = false; _highlighting = false;
+                          }
+                        }),
+                      ),
+                      _toolBtn(context, icon: Icons.gesture, label: '올가미 선택',
+                        active: _lassoMode,
+                        activeColor: Colors.deepPurple,
+                        onTap: () => setState(() {
+                          _imageSelected = false; _selectedImageIndex = -1;
+                          if (_lassoMode) {
+                            _lassoMode = false;
+                            _lassoState.reset();
+                          } else {
+                            _lassoMode = true;
+                            _drawingEnabled = false;
+                            _erasing = false;
+                            _straightLine = false;
+                            _lassoState.reset();
                           }
                         }),
                       ),
@@ -2841,20 +3036,50 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
           ),
           Expanded(
             child: Listener(
+              behavior: HitTestBehavior.opaque,
               onPointerDown: _onPointerDown,
               onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
+              onPointerCancel: _onPointerCancel,
               child: Stack(
                 children: [
                   CustomPaint(
                     size: Size.infinite,
                     painter: _StrokePainter(
-                      strokes: _strokes,
-                      currentStroke: _currentStroke,
+                      drawing: _drawing,
                       images: _images,
+                      lassoState: _lassoState,
+                      lassoSelectedIndices: _lassoState.selectedIndices,
                     ),
                   ),
                   ..._buildImageHandles(),
+                  // 올가미 이동 핸들
+                  if (_lassoMode && _lassoState.complete && _lassoState.centroid != null)
+                    Positioned(
+                      left: _lassoState.centroid!.dx - 28,
+                      top: _lassoState.centroid!.dy - 28,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurple.withValues(alpha: 0.85),
+                            shape: BoxShape.circle,
+                            boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 3))],
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.open_with, color: Colors.white, size: 20),
+                              Text(
+                                '${_lassoState.selectedIndices.length}개',
+                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -2894,9 +3119,11 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       );
 
       // 이미지 터치 영역
+      // 고정 상태(isSelected=false)일 때는 translucent → 펜/터치가 Listener까지 통과
       widgets.add(Positioned(
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
         child: GestureDetector(
+          behavior: isSelected ? HitTestBehavior.opaque : HitTestBehavior.translucent,
           onPanUpdate: isSelected ? (d) => _moveImage(d.delta) : null,
           onLongPress: () => setState(() { _imageSelected = true; _selectedImageIndex = i; }),
           child: Container(
@@ -2953,15 +3180,20 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
 }
 
 class _StrokePainter extends CustomPainter {
-  final List<Stroke> strokes;
-  final Stroke? currentStroke;
+  final _DrawingState drawing;
   final List<_EditorImage> images;
+  final _LassoState? lassoState;
+  final List<int> lassoSelectedIndices;
 
   _StrokePainter({
-    required this.strokes,
-    this.currentStroke,
+    required this.drawing,
     this.images = const [],
-  });
+    this.lassoState,
+    this.lassoSelectedIndices = const [],
+  }) : super(
+            repaint: lassoState != null
+                ? Listenable.merge([drawing, lassoState])
+                : drawing);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2969,11 +3201,51 @@ class _StrokePainter extends CustomPainter {
     for (final img in images) {
       paintImage(canvas: canvas, rect: img.rect, image: img.decoded, fit: BoxFit.fill);
     }
-    for (final stroke in strokes) {
-      _paintStroke(canvas, stroke);
+    for (var i = 0; i < drawing.strokes.length; i++) {
+      _paintStroke(canvas, drawing.strokes[i]);
     }
-    if (currentStroke != null) {
-      _paintStroke(canvas, currentStroke!);
+    if (drawing.currentStroke != null) {
+      _paintStroke(canvas, drawing.currentStroke!);
+    }
+    // 올가미 선택된 스트로크 강조
+    if (lassoSelectedIndices.isNotEmpty) {
+      for (final idx in lassoSelectedIndices) {
+        if (idx < drawing.strokes.length) {
+          final stroke = drawing.strokes[idx];
+          if (stroke.points.length < 2) continue;
+          final hPaint = Paint()
+            ..color = Colors.deepPurple.withValues(alpha: 0.4)
+            ..strokeWidth = stroke.width + 6
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke;
+          for (var i = 0; i < stroke.points.length - 1; i++) {
+            canvas.drawLine(stroke.points[i], stroke.points[i + 1], hPaint);
+          }
+        }
+      }
+    }
+    // 올가미 경로 그리기
+    if (lassoState != null && lassoState!.points.length > 1) {
+      final path = Path()
+        ..moveTo(lassoState!.points.first.dx, lassoState!.points.first.dy);
+      for (final p in lassoState!.points.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      if (lassoState!.complete) path.close();
+
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = Colors.deepPurple.withValues(alpha: lassoState!.complete ? 0.12 : 0.08)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = Colors.deepPurple.withValues(alpha: lassoState!.complete ? 0.9 : 0.6)
+          ..strokeWidth = lassoState!.complete ? 2.0 : 1.5
+          ..style = PaintingStyle.stroke,
+      );
     }
   }
 

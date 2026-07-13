@@ -31,8 +31,22 @@
 
   <title>mindlink</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* 펜슬/터치 이벤트 브라우저 개입 차단 — 저지연 드로잉 */
+    html, body, flt-glass-pane, flt-scene-host, canvas {
+      touch-action: none !important;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+      overscroll-behavior: none !important;
+    }
+    /* Apple Pencil hover 이벤트가 스크롤을 유발하지 않도록 */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
 </head>
-<body>
+<body style="overscroll-behavior:none; overflow:hidden;">
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
