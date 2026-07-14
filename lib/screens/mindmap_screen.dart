@@ -1391,6 +1391,15 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                             _closeCrossLinkPanel();
                             _focusOn(target.position);
                           },
+                          onDeleteLink: (targetId) {
+                            setState(() {
+                              _crossLinkPanelNode!.crossLinks.remove(targetId);
+                              // 상대 노드에서도 제거
+                              final other = _nodes.firstWhere((n) => n.id == targetId, orElse: () => _crossLinkPanelNode!);
+                              if (other.id != _crossLinkPanelNode!.id) other.crossLinks.remove(_crossLinkPanelNode!.id);
+                            });
+                            _saveNodes();
+                          },
                         ),
                       );
                     }),
@@ -2419,11 +2428,13 @@ class _CrossLinkPanel extends StatelessWidget {
   final MindNode node;
   final List<MindNode> allNodes;
   final ValueChanged<MindNode> onNavigate;
+  final ValueChanged<String> onDeleteLink;
 
   const _CrossLinkPanel({
     required this.node,
     required this.allNodes,
     required this.onNavigate,
+    required this.onDeleteLink,
   });
 
   @override
@@ -2437,7 +2448,7 @@ class _CrossLinkPanel extends StatelessWidget {
     return GestureDetector(
       onTap: () {},
       child: Container(
-        width: 170,
+        width: 200,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
@@ -2451,30 +2462,11 @@ class _CrossLinkPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final target in linked)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: [
-                    const Icon(Icons.circle, size: 8, color: Colors.orange),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        target.category.isEmpty ? '(이름 없음)' : target.category,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        minimumSize: const Size(0, 28),
-                      ),
-                      onPressed: () => onNavigate(target),
-                      child: const Text('이동', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
+              _SwipeableLinkRow(
+                key: ValueKey(target.id),
+                target: target,
+                onNavigate: () => onNavigate(target),
+                onDelete: () => onDeleteLink(target.id),
               ),
           ],
         ),
@@ -3814,6 +3806,150 @@ class _BgPreviewPainter extends CustomPainter {
 }
 
 // ── 앱 선택 다이얼로그 ──────────────────────────────────────
+// ── 스와이프로 삭제 버튼 드러내는 노드 연결 행 ──────────────
+class _SwipeableLinkRow extends StatefulWidget {
+  final MindNode target;
+  final VoidCallback onNavigate;
+  final VoidCallback onDelete;
+
+  const _SwipeableLinkRow({
+    super.key,
+    required this.target,
+    required this.onNavigate,
+    required this.onDelete,
+  });
+
+  @override
+  State<_SwipeableLinkRow> createState() => _SwipeableLinkRowState();
+}
+
+class _SwipeableLinkRowState extends State<_SwipeableLinkRow>
+    with SingleTickerProviderStateMixin {
+  static const _revealWidth = 56.0;
+  late final AnimationController _ctrl;
+  late final Animation<double> _offsetAnim;
+  double _dragStart = 0;
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _offsetAnim = Tween<double>(begin: 0, end: -_revealWidth)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onDragStart(DragStartDetails d) => _dragStart = d.localPosition.dx;
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    final delta = d.localPosition.dx - _dragStart;
+    final progress = (_open ? 1.0 + delta / _revealWidth : delta / (-_revealWidth)).clamp(0.0, 1.0);
+    _ctrl.value = progress;
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    if (_ctrl.value > 0.4) {
+      _ctrl.forward().then((_) => setState(() => _open = true));
+    } else {
+      _ctrl.reverse().then((_) => setState(() => _open = false));
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final label = widget.target.category.isEmpty ? '(이름 없음)' : widget.target.category;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('연결을 삭제하시겠습니까?'),
+        content: Text('"$label" 노드와의 연결을 삭제합니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('아니요'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('네'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.onDelete();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final label = widget.target.category.isEmpty ? '(이름 없음)' : widget.target.category;
+    return GestureDetector(
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: _offsetAnim,
+          builder: (context, _) => Stack(
+            children: [
+              Positioned(
+                right: 0, top: 0, bottom: 0,
+                width: _revealWidth,
+                child: GestureDetector(
+                  onTap: _confirmDelete,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade400,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+                  ),
+                ),
+              ),
+              Transform.translate(
+                offset: Offset(_offsetAnim.value, 0),
+                child: Container(
+                  color: cs.surface,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.circle, size: 8, color: Colors.orange),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 28),
+                          ),
+                          onPressed: widget.onNavigate,
+                          child: const Text('이동', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── 스와이프로 삭제 버튼 드러내는 파일 행 ───────────────────
 class _SwipeableFileRow extends StatefulWidget {
   final LinkedFile file;
