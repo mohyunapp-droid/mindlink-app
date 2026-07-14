@@ -2019,79 +2019,11 @@ class _FilePanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final file in node.linkedFiles)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Dismissible(
-                  key: ValueKey(file.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: Colors.red.shade400,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 12),
-                    child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 20),
-                  ),
-                  confirmDismiss: (_) async {
-                    return await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('삭제하시겠습니까?'),
-                        content: Text('"${file.name}"을(를) 삭제합니다.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('아니요'),
-                          ),
-                          FilledButton(
-                            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('네'),
-                          ),
-                        ],
-                      ),
-                    ) ?? false;
-                  },
-                  onDismissed: (_) => onDelete(file),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      children: [
-                        if (file.extension == 'app') ...[
-                          Text(
-                            _kApps.firstWhere((a) => a.name == file.name,
-                                orElse: () => _AppInfo(file.name, file.path, '📱', '')).emoji,
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                          const SizedBox(width: 4),
-                        ] else if (file.extension == 'youtube') ...[
-                          Icon(Icons.smart_display_rounded, size: 16, color: Colors.red.shade400),
-                          const SizedBox(width: 4),
-                        ] else ...[
-                          Icon(Icons.insert_drive_file_rounded, size: 16, color: cs.primary),
-                          const SizedBox(width: 4),
-                        ],
-                        Expanded(
-                          child: Text(
-                            file.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            minimumSize: const Size(0, 28),
-                          ),
-                          onPressed: () => onViewTap(file),
-                          child: Text(
-                            file.extension == 'app' ? '열기' : '보기',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              _SwipeableFileRow(
+                key: ValueKey(file.id),
+                file: file,
+                onViewTap: () => onViewTap(file),
+                onDelete: () => onDelete(file),
               ),
           ],
         ),
@@ -3882,6 +3814,173 @@ class _BgPreviewPainter extends CustomPainter {
 }
 
 // ── 앱 선택 다이얼로그 ──────────────────────────────────────
+// ── 스와이프로 삭제 버튼 드러내는 파일 행 ───────────────────
+class _SwipeableFileRow extends StatefulWidget {
+  final LinkedFile file;
+  final VoidCallback onViewTap;
+  final VoidCallback onDelete;
+
+  const _SwipeableFileRow({
+    super.key,
+    required this.file,
+    required this.onViewTap,
+    required this.onDelete,
+  });
+
+  @override
+  State<_SwipeableFileRow> createState() => _SwipeableFileRowState();
+}
+
+class _SwipeableFileRowState extends State<_SwipeableFileRow>
+    with SingleTickerProviderStateMixin {
+  static const _revealWidth = 56.0;
+  late final AnimationController _ctrl;
+  late final Animation<double> _offsetAnim;
+  double _dragStart = 0;
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _offsetAnim = Tween<double>(begin: 0, end: -_revealWidth)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onHorizontalDragStart(DragStartDetails d) {
+    _dragStart = d.localPosition.dx;
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails d) {
+    final delta = d.localPosition.dx - _dragStart;
+    // 왼쪽 드래그 → 열기, 오른쪽 → 닫기
+    final progress = (_open ? 1.0 + delta / _revealWidth : delta / (-_revealWidth)).clamp(0.0, 1.0);
+    _ctrl.value = progress;
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails d) {
+    if (_ctrl.value > 0.4) {
+      _ctrl.forward().then((_) => setState(() => _open = true));
+    } else {
+      _ctrl.reverse().then((_) => setState(() => _open = false));
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('삭제하시겠습니까?'),
+        content: Text('"${widget.file.name}"을(를) 삭제합니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('아니요'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('네'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.onDelete();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final file = widget.file;
+    return GestureDetector(
+      onHorizontalDragStart: _onHorizontalDragStart,
+      onHorizontalDragUpdate: _onHorizontalDragUpdate,
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: _offsetAnim,
+          builder: (context, _) {
+            return Stack(
+              children: [
+                // 뒤에 숨어있는 삭제 버튼
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: _revealWidth,
+                  child: GestureDetector(
+                    onTap: _confirmDelete,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade400,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ),
+                // 앞에 있는 행 (슬라이드)
+                Transform.translate(
+                  offset: Offset(_offsetAnim.value, 0),
+                  child: Container(
+                    color: cs.surface,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          if (file.extension == 'app') ...[
+                            Text(
+                              _kApps.firstWhere((a) => a.name == file.name,
+                                  orElse: () => _AppInfo(file.name, file.path, '📱', '')).emoji,
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            const SizedBox(width: 4),
+                          ] else if (file.extension == 'youtube') ...[
+                            Icon(Icons.smart_display_rounded, size: 16, color: Colors.red.shade400),
+                            const SizedBox(width: 4),
+                          ] else ...[
+                            Icon(Icons.insert_drive_file_rounded, size: 16, color: cs.primary),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: Text(
+                              file.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              minimumSize: const Size(0, 28),
+                            ),
+                            onPressed: widget.onViewTap,
+                            child: Text(
+                              file.extension == 'app' ? '열기' : '보기',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _AppPickerDialog extends StatefulWidget {
   const _AppPickerDialog();
   @override
