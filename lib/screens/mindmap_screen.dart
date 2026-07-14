@@ -1361,6 +1361,13 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                         child: _FilePanel(
                           node: _filePanelNode!,
                           onViewTap: _showFilePreview,
+                          onDelete: (file) {
+                            setState(() {
+                              _filePanelNode!.linkedFiles.remove(file);
+                              if (_previewFile?.id == file.id) _previewFile = null;
+                            });
+                            _saveNodes();
+                          },
                         ),
                       );
                     }),
@@ -1988,18 +1995,20 @@ class _NodeWidget extends StatelessWidget {
 class _FilePanel extends StatelessWidget {
   final MindNode node;
   final ValueChanged<LinkedFile> onViewTap;
+  final ValueChanged<LinkedFile> onDelete;
 
-  const _FilePanel({required this.node, required this.onViewTap});
+  const _FilePanel({required this.node, required this.onViewTap, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
-      onTap: () {}, // absorb taps so they don't fall through to the canvas dismiss handler
+      onTap: () {},
       child: Container(
-        width: 170,
+        width: 200,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
             BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2)),
@@ -2010,41 +2019,58 @@ class _FilePanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final file in node.linkedFiles)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: [
-                    if (file.extension == 'app') ...[
-                      Text(
-                        _kApps.firstWhere((a) => a.name == file.name,
-                            orElse: () => _AppInfo(file.name, file.path, '📱', '')).emoji,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      const SizedBox(width: 4),
-                    ] else if (file.extension == 'youtube') ...[
-                      Icon(Icons.smart_display_rounded, size: 16, color: Colors.red.shade400),
-                      const SizedBox(width: 4),
-                    ],
-                    Expanded(
-                      child: Text(
-                        file.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Dismissible(
+                  key: ValueKey(file.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    color: Colors.red.shade400,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 12),
+                    child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 20),
+                  ),
+                  onDismissed: (_) => onDelete(file),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        if (file.extension == 'app') ...[
+                          Text(
+                            _kApps.firstWhere((a) => a.name == file.name,
+                                orElse: () => _AppInfo(file.name, file.path, '📱', '')).emoji,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(width: 4),
+                        ] else if (file.extension == 'youtube') ...[
+                          Icon(Icons.smart_display_rounded, size: 16, color: Colors.red.shade400),
+                          const SizedBox(width: 4),
+                        ] else ...[
+                          Icon(Icons.insert_drive_file_rounded, size: 16, color: cs.primary),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: Text(
+                            file.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 28),
+                          ),
+                          onPressed: () => onViewTap(file),
+                          child: Text(
+                            file.extension == 'app' ? '열기' : '보기',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
                     ),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        minimumSize: const Size(0, 28),
-                      ),
-                      onPressed: () => onViewTap(file),
-                      child: Text(
-                        file.extension == 'app' ? '열기' : '보기',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
           ],
