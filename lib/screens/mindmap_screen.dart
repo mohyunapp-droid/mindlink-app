@@ -2555,6 +2555,13 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   final List<_EditorImage> _images = [];
   int _selectedImageIndex = -1;
 
+  // 핀치 줌
+  double _canvasScale = 1.0;
+  Offset _canvasOffset = Offset.zero;
+  final Map<int, Offset> _pointerPositions = {};
+  bool _isPinching = false;
+  double? _lastPinchDistance;
+
   @override
   void initState() {
     super.initState();
@@ -2629,25 +2636,70 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     }
   }
 
+  // 화면 좌표 → 캔버스 좌표 변환
+  Offset _toCanvas(Offset screenPos) =>
+      (screenPos - _canvasOffset) / _canvasScale;
+
+  void _handlePinch() {
+    if (_pointerPositions.length < 2) return;
+    final pts = _pointerPositions.values.toList();
+    final p1 = pts[0];
+    final p2 = pts[1];
+    final dist = (p2 - p1).distance;
+    final mid = (p1 + p2) / 2;
+
+    if (_lastPinchDistance != null && _lastPinchDistance! > 0) {
+      final scaleDelta = dist / _lastPinchDistance!;
+      final newScale = (_canvasScale * scaleDelta).clamp(0.25, 6.0);
+      final ratio = newScale / _canvasScale;
+      // 핀치 중점이 고정되도록 오프셋 보정
+      _canvasOffset = mid - (mid - _canvasOffset) * ratio;
+      _canvasScale = newScale;
+      setState(() {});
+    }
+    _lastPinchDistance = dist;
+  }
+
+  void _cancelDrawingForPinch() {
+    _drawing.cancelStroke();
+    _lassoState.reset();
+    _activePointerId = null;
+    _straightLineStart = null;
+    setState(() => _pointerOnImage = false);
+  }
+
   // 팜 리젝션: 첫 번째 포인터만 드로잉에 사용, 나머지는 무시
   int? _activePointerId;
 
   void _onPointerDown(PointerDownEvent event) {
+    _pointerPositions[event.pointer] = event.localPosition;
+
+    // 두 손가락 이상 → 핀치 줌 모드 진입
+    if (_pointerPositions.length >= 2) {
+      if (!_isPinching) {
+        _isPinching = true;
+        _lastPinchDistance = null;
+        _cancelDrawingForPinch();
+      }
+      return;
+    }
+
+    // 핀치 중이면 추가 드로잉 무시
+    if (_isPinching) return;
+
     // 이미 다른 포인터가 드로잉 중이면 무시 (손바닥 차단)
     if (_activePointerId != null && _activePointerId != event.pointer) return;
     _activePointerId = event.pointer;
-    final pos = event.localPosition;
+    final pos = _toCanvas(event.localPosition);
 
     // 올가미 모드
     if (_lassoMode) {
       if (_lassoState.complete) {
-        // 이동 핸들 근처 탭 → 이동 시작
         if (_lassoState.centroid != null &&
-            (_lassoState.centroid! - pos).distance < 44) {
+            (_lassoState.centroid! - pos).distance < 44 / _canvasScale) {
           _lassoState.moving = true;
           return;
         }
-        // 다른 곳 탭 → 초기화 후 새 올가미
         _lassoState.reset();
       }
       _lassoState.startLasso(pos);
@@ -2678,40 +2730,49 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
         _activePointerId = null;
         return;
       }
-      // 빈 캔버스 탭 → 고정
       setState(() { _imageSelected = false; _selectedImageIndex = -1; });
       _pointerOnImage = false;
     } else {
       _pointerOnImage = false;
     }
     if (_erasing) {
-      _drawing.eraseAt(event.localPosition, 20.0);
+      _drawing.eraseAt(pos, 20.0 / _canvasScale);
       return;
     }
     final color = _highlighting ? _penColor.withValues(alpha: 0.35) : _penColor;
     final width = _highlighting ? _strokeWidth * 4 : _strokeWidth;
     if (_straightLine) {
-      _straightLineStart = event.localPosition;
+      _straightLineStart = pos;
       _drawing.startStroke(Stroke(color: color, width: width)
-        ..points.add(event.localPosition)
-        ..points.add(event.localPosition));
+        ..points.add(pos)
+        ..points.add(pos));
     } else {
       _drawing.startStroke(Stroke(color: color, width: width)
-        ..points.add(event.localPosition));
+        ..points.add(pos));
     }
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    _pointerPositions[event.pointer] = event.localPosition;
+
+    // 핀치 줌 처리
+    if (_isPinching || _pointerPositions.length >= 2) {
+      _handlePinch();
+      return;
+    }
+
     if (_activePointerId != null && _activePointerId != event.pointer) return;
+    final pos = _toCanvas(event.localPosition);
+    final delta = event.delta / _canvasScale;
 
     // 올가미 모드
     if (_lassoMode) {
       if (_lassoState.complete && _lassoState.moving) {
-        _lassoState.moveDelta(_drawing.strokes, event.delta);
+        _lassoState.moveDelta(_drawing.strokes, delta);
         return;
       }
       if (!_lassoState.complete) {
-        _lassoState.addPoint(event.localPosition);
+        _lassoState.addPoint(pos);
       }
       return;
     }
@@ -2719,18 +2780,30 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     if (!_drawingEnabled) return;
     if (_pointerOnImage) return;
     if (_erasing) {
-      _drawing.eraseAt(event.localPosition, 20.0);
+      _drawing.eraseAt(pos, 20.0 / _canvasScale);
       return;
     }
     if (_drawing.currentStroke == null) return;
     if (_straightLine && _straightLineStart != null) {
-      _drawing.updateStraightLine(_straightLineStart!, event.localPosition);
+      _drawing.updateStraightLine(_straightLineStart!, pos);
     } else {
-      _drawing.addPoint(event.localPosition);
+      _drawing.addPoint(pos);
     }
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    _pointerPositions.remove(event.pointer);
+
+    // 핀치 종료 감지
+    if (_isPinching) {
+      if (_pointerPositions.length < 2) {
+        _isPinching = false;
+        _lastPinchDistance = null;
+        _activePointerId = null;
+      }
+      return;
+    }
+
     if (_activePointerId == event.pointer) _activePointerId = null;
 
     // 올가미 모드
@@ -2742,7 +2815,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       if (!_lassoState.complete && _lassoState.points.length > 15) {
         final first = _lassoState.points.first;
         final last = _lassoState.points.last;
-        if ((first - last).distance < 50) {
+        if ((first - last).distance < 50 / _canvasScale) {
           _closeLasso();
         } else {
           _lassoState.reset();
@@ -2760,7 +2833,15 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
-    // iOS가 제스처를 취소할 때 pointerUp 대신 cancel을 보냄 → 잠금 해제
+    _pointerPositions.remove(event.pointer);
+    if (_isPinching) {
+      if (_pointerPositions.length < 2) {
+        _isPinching = false;
+        _lastPinchDistance = null;
+        _activePointerId = null;
+      }
+      return;
+    }
     if (_activePointerId == event.pointer) _activePointerId = null;
     if (_lassoMode) {
       _lassoState.reset();
@@ -3041,46 +3122,53 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
               onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
               onPointerCancel: _onPointerCancel,
-              child: Stack(
-                children: [
-                  CustomPaint(
-                    size: Size.infinite,
-                    painter: _StrokePainter(
-                      drawing: _drawing,
-                      images: _images,
-                      lassoState: _lassoState,
-                      lassoSelectedIndices: _lassoState.selectedIndices,
-                    ),
-                  ),
-                  ..._buildImageHandles(),
-                  // 올가미 이동 핸들
-                  if (_lassoMode && _lassoState.complete && _lassoState.centroid != null)
-                    Positioned(
-                      left: _lassoState.centroid!.dx - 28,
-                      top: _lassoState.centroid!.dy - 28,
-                      child: IgnorePointer(
-                        child: Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: Colors.deepPurple.withValues(alpha: 0.85),
-                            shape: BoxShape.circle,
-                            boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 3))],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.open_with, color: Colors.white, size: 20),
-                              Text(
-                                '${_lassoState.selectedIndices.length}개',
-                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
+              child: ClipRect(
+                child: Transform(
+                  transform: Matrix4.identity()
+                    ..translateByDouble(_canvasOffset.dx, _canvasOffset.dy, 0, 1)
+                    ..scaleByDouble(_canvasScale, _canvasScale, 1, 1),
+                  child: Stack(
+                    children: [
+                      CustomPaint(
+                        size: Size.infinite,
+                        painter: _StrokePainter(
+                          drawing: _drawing,
+                          images: _images,
+                          lassoState: _lassoState,
+                          lassoSelectedIndices: _lassoState.selectedIndices,
                         ),
                       ),
-                    ),
-                ],
+                      ..._buildImageHandles(),
+                      // 올가미 이동 핸들
+                      if (_lassoMode && _lassoState.complete && _lassoState.centroid != null)
+                        Positioned(
+                          left: _lassoState.centroid!.dx - 28,
+                          top: _lassoState.centroid!.dy - 28,
+                          child: IgnorePointer(
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.deepPurple.withValues(alpha: 0.85),
+                                shape: BoxShape.circle,
+                                boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 3))],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.open_with, color: Colors.white, size: 20),
+                                  Text(
+                                    '${_lassoState.selectedIndices.length}개',
+                                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
