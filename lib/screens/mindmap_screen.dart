@@ -2030,6 +2030,26 @@ class _FilePanel extends StatelessWidget {
                     padding: const EdgeInsets.only(right: 12),
                     child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 20),
                   ),
+                  confirmDismiss: (_) async {
+                    return await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('삭제하시겠습니까?'),
+                        content: Text('"${file.name}"을(를) 삭제합니다.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('아니요'),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('네'),
+                          ),
+                        ],
+                      ),
+                    ) ?? false;
+                  },
                   onDismissed: (_) => onDelete(file),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
