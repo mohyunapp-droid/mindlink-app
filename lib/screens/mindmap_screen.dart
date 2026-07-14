@@ -2493,10 +2493,46 @@ class _DrawingState extends ChangeNotifier {
   }
 
   void eraseAt(Offset position, double radius) {
-    final before = strokes.length;
-    strokes.removeWhere((stroke) =>
-        stroke.points.any((pt) => (pt - position).distance < radius));
-    if (strokes.length != before) notifyListeners();
+    final newStrokes = <Stroke>[];
+    bool changed = false;
+
+    for (final stroke in strokes) {
+      final segments = _splitErase(stroke, position, radius);
+      if (segments.length == 1 && identical(segments[0], stroke)) {
+        newStrokes.add(stroke);
+      } else {
+        newStrokes.addAll(segments);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      strokes.clear();
+      strokes.addAll(newStrokes);
+      notifyListeners();
+    }
+  }
+
+  List<Stroke> _splitErase(Stroke stroke, Offset center, double radius) {
+    final pts = stroke.points;
+    final keep = [for (final p in pts) (p - center).distance > radius];
+
+    if (keep.every((k) => k)) return [stroke];
+    if (keep.every((k) => !k)) return [];
+
+    final result = <Stroke>[];
+    Stroke? seg;
+    for (var i = 0; i < pts.length; i++) {
+      if (keep[i]) {
+        seg ??= Stroke(color: stroke.color, width: stroke.width);
+        seg.points.add(pts[i]);
+      } else {
+        if (seg != null && seg.points.length >= 2) result.add(seg);
+        seg = null;
+      }
+    }
+    if (seg != null && seg.points.length >= 2) result.add(seg);
+    return result;
   }
 
   void undo() {
@@ -2554,6 +2590,10 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   bool _imageSelected = false;
   final List<_EditorImage> _images = [];
   int _selectedImageIndex = -1;
+
+  // 지우개
+  double _eraserSize = 20.0; // 캔버스 좌표 반지름
+  Offset? _eraserScreenPos;  // 화면 좌표 (커서 표시용)
 
   // 핀치 줌
   double _canvasScale = 1.0;
@@ -2736,7 +2776,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       _pointerOnImage = false;
     }
     if (_erasing) {
-      _drawing.eraseAt(pos, 20.0 / _canvasScale);
+      setState(() => _eraserScreenPos = event.localPosition);
+      _drawing.eraseAt(pos, _eraserSize);
       return;
     }
     final color = _highlighting ? _penColor.withValues(alpha: 0.35) : _penColor;
@@ -2780,7 +2821,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     if (!_drawingEnabled) return;
     if (_pointerOnImage) return;
     if (_erasing) {
-      _drawing.eraseAt(pos, 20.0 / _canvasScale);
+      setState(() => _eraserScreenPos = event.localPosition);
+      _drawing.eraseAt(pos, _eraserSize);
       return;
     }
     if (_drawing.currentStroke == null) return;
@@ -2827,7 +2869,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     }
 
     if (_activePointerId != null) return;
-    setState(() => _pointerOnImage = false);
+    setState(() { _pointerOnImage = false; _eraserScreenPos = null; });
     _drawing.finishStroke();
     _straightLineStart = null;
   }
@@ -2843,6 +2885,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       return;
     }
     if (_activePointerId == event.pointer) _activePointerId = null;
+    setState(() => _eraserScreenPos = null);
     if (_lassoMode) {
       _lassoState.reset();
       return;
@@ -3070,53 +3113,20 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                     ],
                   ),
                 ),
-                // 붓 크기 — 5단계 시각 버튼
+                // 크기 행 — 지우개 모드일 때는 지우개 크기 표시
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
-                  child: Row(
-                    children: [
-                      const Text('크기', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      const SizedBox(width: 10),
-                      for (final size in [2.0, 4.0, 7.0, 12.0, 20.0])
-                        GestureDetector(
-                          onTap: () => setState(() => _strokeWidth = size),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 120),
-                            width: 40,
-                            height: 36,
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            decoration: BoxDecoration(
-                              color: _strokeWidth == size
-                                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                              border: _strokeWidth == size
-                                  ? Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4), width: 1.5)
-                                  : Border.all(color: Colors.transparent),
-                            ),
-                            child: Center(
-                              child: Container(
-                                width: size.clamp(2, 28),
-                                height: size.clamp(2, 28),
-                                decoration: BoxDecoration(
-                                  color: _highlighting
-                                      ? _penColor.withValues(alpha: 0.45)
-                                      : _penColor,
-                                  shape: _highlighting ? BoxShape.rectangle : BoxShape.circle,
-                                  borderRadius: _highlighting ? BorderRadius.circular(2) : null,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  child: _erasing
+                      ? _buildEraserSizeRow(context)
+                      : _buildPenSizeRow(context),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: Listener(
+            child: Stack(
+              children: [
+            Listener(
               behavior: HitTestBehavior.opaque,
               onPointerDown: _onPointerDown,
               onPointerMove: _onPointerMove,
@@ -3171,9 +3181,110 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                 ),
               ),
             ),
+            // 지우개 커서 오버레이 (화면 좌표)
+            if (_erasing && _eraserScreenPos != null)
+              Positioned(
+                left: _eraserScreenPos!.dx - _eraserSize * _canvasScale,
+                top: _eraserScreenPos!.dy - _eraserSize * _canvasScale,
+                child: IgnorePointer(
+                  child: Container(
+                    width: _eraserSize * _canvasScale * 2,
+                    height: _eraserSize * _canvasScale * 2,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.5),
+                      border: Border.all(color: Colors.black54, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPenSizeRow(BuildContext context) {
+    return Row(
+      children: [
+        const Text('크기', style: TextStyle(fontSize: 11, color: Colors.grey)),
+        const SizedBox(width: 10),
+        for (final size in [2.0, 4.0, 7.0, 12.0, 20.0])
+          GestureDetector(
+            onTap: () => setState(() => _strokeWidth = size),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 40,
+              height: 36,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                color: _strokeWidth == size
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: _strokeWidth == size
+                    ? Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4), width: 1.5)
+                    : Border.all(color: Colors.transparent),
+              ),
+              child: Center(
+                child: Container(
+                  width: size.clamp(2, 28),
+                  height: size.clamp(2, 28),
+                  decoration: BoxDecoration(
+                    color: _highlighting ? _penColor.withValues(alpha: 0.45) : _penColor,
+                    shape: _highlighting ? BoxShape.rectangle : BoxShape.circle,
+                    borderRadius: _highlighting ? BorderRadius.circular(2) : null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEraserSizeRow(BuildContext context) {
+    // 지우개 반지름 옵션 (캔버스 단위)
+    const sizes = [8.0, 16.0, 28.0, 48.0, 80.0];
+    return Row(
+      children: [
+        const Icon(Icons.circle_outlined, size: 13, color: Colors.grey),
+        const SizedBox(width: 6),
+        const Text('지우개 크기', style: TextStyle(fontSize: 11, color: Colors.grey)),
+        const SizedBox(width: 8),
+        for (final r in sizes)
+          GestureDetector(
+            onTap: () => setState(() => _eraserSize = r),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 44,
+              height: 36,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: _eraserSize == r
+                    ? Colors.grey.withValues(alpha: 0.18)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: _eraserSize == r
+                    ? Border.all(color: Colors.grey.shade400, width: 1.5)
+                    : Border.all(color: Colors.transparent),
+              ),
+              child: Center(
+                child: Container(
+                  width: (r * 0.35).clamp(6, 32),
+                  height: (r * 0.35).clamp(6, 32),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.transparent,
+                    border: Border.all(color: Colors.black54, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
