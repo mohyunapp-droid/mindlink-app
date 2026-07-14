@@ -2740,12 +2740,14 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     // 올가미 모드
     if (_lassoMode) {
       if (_lassoState.complete) {
-        if (_lassoState.centroid != null &&
-            (_lassoState.centroid! - pos).distance < 44 / _canvasScale) {
+        // 라쏘 폴리곤 안을 탭하면 이동 시작
+        if (_lassoState.points.length >= 3 &&
+            _pointInPolygon(pos, _lassoState.points)) {
           _lassoState.moving = true;
           return;
         }
         _lassoState.reset();
+        setState(() {});
       }
       _lassoState.startLasso(pos);
       return;
@@ -2857,6 +2859,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     if (_lassoMode) {
       if (_lassoState.moving) {
         _lassoState.stopMoving();
+        _drawing.notifyListeners();
+        setState(() {});
         return;
       }
       if (!_lassoState.complete && _lassoState.points.length > 15) {
@@ -2864,11 +2868,14 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
         final last = _lassoState.points.last;
         if ((first - last).distance < 50 / _canvasScale) {
           _closeLasso();
+          setState(() {});
         } else {
           _lassoState.reset();
+          setState(() {});
         }
       } else if (!_lassoState.complete) {
         _lassoState.reset();
+        setState(() {});
       }
       return;
     }
@@ -3160,33 +3167,6 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                         ),
                       ),
                       ..._buildImageHandles(),
-                      // 올가미 이동 핸들
-                      if (_lassoMode && _lassoState.complete && _lassoState.centroid != null)
-                        Positioned(
-                          left: _lassoState.centroid!.dx - 28,
-                          top: _lassoState.centroid!.dy - 28,
-                          child: IgnorePointer(
-                            child: Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: Colors.deepPurple.withValues(alpha: 0.85),
-                                shape: BoxShape.circle,
-                                boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 3))],
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.open_with, color: Colors.white, size: 20),
-                                  Text(
-                                    '${_lassoState.selectedIndices.length}개',
-                                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -3490,8 +3470,9 @@ class _StrokePainter extends CustomPainter {
       _paintStroke(canvas, drawing.currentStroke!);
     }
     // 올가미 선택된 스트로크 강조
-    if (lassoSelectedIndices.isNotEmpty) {
-      for (final idx in lassoSelectedIndices) {
+    final _selIndices = lassoState?.selectedIndices ?? lassoSelectedIndices;
+    if (_selIndices.isNotEmpty) {
+      for (final idx in _selIndices) {
         if (idx < drawing.strokes.length) {
           final stroke = drawing.strokes[idx];
           if (stroke.points.length < 2) continue;
@@ -3528,6 +3509,12 @@ class _StrokePainter extends CustomPainter {
           ..strokeWidth = lassoState!.complete ? 2.0 : 1.5
           ..style = PaintingStyle.stroke,
       );
+      // 선택 완료 후 이동 핸들 그리기 (캔버스 좌표 내에서)
+      if (lassoState!.complete && lassoState!.centroid != null && !lassoState!.moving) {
+        final c = lassoState!.centroid!;
+        canvas.drawCircle(c, 24, Paint()..color = Colors.deepPurple.withValues(alpha: 0.85));
+        canvas.drawCircle(c, 24, Paint()..color = Colors.white.withValues(alpha: 0.3)..style = PaintingStyle.stroke..strokeWidth = 2);
+      }
     }
   }
 
