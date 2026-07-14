@@ -14,6 +14,89 @@ import '../models/node_model.dart';
 
 const _imageExtensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'};
 
+// ── 앱 연결 데이터 ──────────────────────────────────────────
+class _AppInfo {
+  final String name;
+  final String scheme; // URL scheme to launch
+  final String emoji;
+  final String category;
+  const _AppInfo(this.name, this.scheme, this.emoji, this.category);
+}
+
+const _kApps = [
+  // SNS / 메신저
+  _AppInfo('카카오톡', 'kakaotalk://', '💬', 'SNS'),
+  _AppInfo('인스타그램', 'instagram://', '📸', 'SNS'),
+  _AppInfo('네이버 밴드', 'bandapp://', '📣', 'SNS'),
+  _AppInfo('트위터(X)', 'twitter://', '🐦', 'SNS'),
+  _AppInfo('페이스북', 'fb://', '👤', 'SNS'),
+  _AppInfo('라인', 'line://', '💚', 'SNS'),
+  _AppInfo('텔레그램', 'tg://', '✈️', 'SNS'),
+  _AppInfo('디스코드', 'discord://', '🎮', 'SNS'),
+  _AppInfo('슬랙', 'slack://', '🔷', 'SNS'),
+  // 생산성
+  _AppInfo('Notion', 'notion://', '📝', '생산성'),
+  _AppInfo('Obsidian', 'obsidian://', '🔮', '생산성'),
+  _AppInfo('GoodNotes', 'goodnotes5://', '🖊️', '생산성'),
+  _AppInfo('Notability', 'notability://', '📒', '생산성'),
+  _AppInfo('Procreate', 'procreate://', '🎨', '생산성'),
+  _AppInfo('Pages', 'ms-word://', '📄', '생산성'),
+  _AppInfo('Numbers', 'ms-excel://', '📊', '생산성'),
+  _AppInfo('Keynote', 'ms-powerpoint://', '📑', '생산성'),
+  _AppInfo('Microsoft Word', 'ms-word://', '📘', '생산성'),
+  _AppInfo('Microsoft Excel', 'ms-excel://', '📗', '생산성'),
+  _AppInfo('Microsoft PowerPoint', 'ms-powerpoint://', '📙', '생산성'),
+  _AppInfo('Google Drive', 'googledrive://', '☁️', '생산성'),
+  _AppInfo('Google Docs', 'googledocs://', '📃', '생산성'),
+  _AppInfo('Dropbox', 'dbapi-2://', '📦', '생산성'),
+  _AppInfo('Bear', 'bear://', '🐻', '생산성'),
+  _AppInfo('Evernote', 'evernote://', '🐘', '생산성'),
+  _AppInfo('Things 3', 'things://', '✅', '생산성'),
+  _AppInfo('Todoist', 'todoist://', '🔴', '생산성'),
+  // 미디어
+  _AppInfo('유튜브', 'youtube://', '▶️', '미디어'),
+  _AppInfo('넷플릭스', 'nflx://', '🎬', '미디어'),
+  _AppInfo('티빙', 'tving://', '📺', '미디어'),
+  _AppInfo('웨이브', 'wavve://', '🌊', '미디어'),
+  _AppInfo('왓챠', 'watcha://', '🎥', '미디어'),
+  _AppInfo('멜론', 'melon://', '🍈', '미디어'),
+  _AppInfo('지니뮤직', 'genie://', '🎵', '미디어'),
+  _AppInfo('Spotify', 'spotify://', '🟢', '미디어'),
+  _AppInfo('Apple Music', 'music://', '🎶', '미디어'),
+  _AppInfo('팟캐스트', 'pcast://', '🎙️', '미디어'),
+  _AppInfo('카카오TV', 'kakaolink://', '🟡', '미디어'),
+  // 교육
+  _AppInfo('클래스101', 'class101://', '🎓', '교육'),
+  _AppInfo('강남인강', 'ebs://', '📚', '교육'),
+  _AppInfo('Khan Academy', 'khanacademy://', '🏫', '교육'),
+  _AppInfo('Duolingo', 'duolingo://', '🦜', '교육'),
+  _AppInfo('Coursera', 'coursera://', '🎒', '교육'),
+  // 쇼핑 / 금융
+  _AppInfo('쿠팡', 'coupang://', '🛍️', '쇼핑/금융'),
+  _AppInfo('네이버 쇼핑', 'navershopping://', '🏪', '쇼핑/금융'),
+  _AppInfo('당근마켓', 'daangn://', '🥕', '쇼핑/금융'),
+  _AppInfo('카카오페이', 'kakaopay://', '💳', '쇼핑/금융'),
+  _AppInfo('토스', 'supertoss://', '💸', '쇼핑/금융'),
+  _AppInfo('네이버페이', 'naverpay://', '💰', '쇼핑/금융'),
+  // 지도 / 교통
+  _AppInfo('카카오맵', 'kakaomap://', '🗺️', '지도/교통'),
+  _AppInfo('네이버지도', 'nmap://', '📍', '지도/교통'),
+  _AppInfo('구글맵', 'comgooglemaps://', '🌍', '지도/교통'),
+  _AppInfo('카카오T', 'kakaot://', '🚖', '지도/교통'),
+  _AppInfo('티맵', 'tmap://', '🚗', '지도/교통'),
+  _AppInfo('국내 지하철', 'korail://', '🚇', '지도/교통'),
+  // 건강
+  _AppInfo('건강(Apple Health)', 'x-apple-health://', '❤️', '건강'),
+  _AppInfo('나이키런', 'nikerunning://', '👟', '건강'),
+  _AppInfo('눔(Noom)', 'noom://', '⚖️', '건강'),
+  // 기타 / 시스템
+  _AppInfo('사파리', 'https://', '🧭', '기타'),
+  _AppInfo('앱스토어', 'itms-apps://', '🍎', '기타'),
+  _AppInfo('설정', 'App-prefs://', '⚙️', '기타'),
+  _AppInfo('카메라', 'camera://', '📷', '기타'),
+  _AppInfo('계산기', 'calc://', '🔢', '기타'),
+];
+
 const _uuid = Uuid();
 
 // Matches the node card's footprint (see _NodeWidget's 120-wide card) so the
@@ -325,6 +408,28 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('유튜브 링크가 연결됨')),
+      );
+    }
+  }
+
+  Future<void> _addAppLinkForNode(MindNode node) async {
+    final app = await showDialog<_AppInfo>(
+      context: context,
+      builder: (ctx) => const _AppPickerDialog(),
+    );
+    if (app == null || !mounted) return;
+    setState(() {
+      node.linkedFiles.add(LinkedFile(
+        id: _uuid.v4(),
+        name: app.name,
+        path: app.scheme,
+        extension: 'app',
+      ));
+    });
+    _saveNodes();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"${app.name}" 앱 연결됨')),
       );
     }
   }
@@ -885,7 +990,22 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
   }
 
   void _showFilePreview(LinkedFile file) {
+    if (file.extension == 'app') {
+      _launchAppLink(file);
+      return;
+    }
     setState(() => _previewFile = file);
+  }
+
+  Future<void> _launchAppLink(LinkedFile file) async {
+    final uri = Uri.tryParse(file.path);
+    if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('"${file.name}" 앱을 열 수 없습니다. 앱이 설치되어 있는지 확인하세요.')),
+        );
+      }
+    }
   }
 
   double _clampLeft(double desired, {required double panelWidth}) {
@@ -1203,6 +1323,11 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                             final node = _connectPanelNode!;
                             _closeConnectPanel();
                             _addYoutubeLinkForNode(node);
+                          },
+                          onAddApp: () {
+                            final node = _connectPanelNode!;
+                            _closeConnectPanel();
+                            _addAppLinkForNode(node);
                           },
                         ),
                       );
@@ -1889,6 +2014,17 @@ class _FilePanel extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(
                   children: [
+                    if (file.extension == 'app') ...[
+                      Text(
+                        _kApps.firstWhere((a) => a.name == file.name,
+                            orElse: () => _AppInfo(file.name, file.path, '📱', '')).emoji,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(width: 4),
+                    ] else if (file.extension == 'youtube') ...[
+                      Icon(Icons.smart_display_rounded, size: 16, color: Colors.red.shade400),
+                      const SizedBox(width: 4),
+                    ],
                     Expanded(
                       child: Text(
                         file.name,
@@ -1903,7 +2039,10 @@ class _FilePanel extends StatelessWidget {
                         minimumSize: const Size(0, 28),
                       ),
                       onPressed: () => onViewTap(file),
-                      child: const Text('보기', style: TextStyle(fontSize: 12)),
+                      child: Text(
+                        file.extension == 'app' ? '열기' : '보기',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ),
                   ],
                 ),
@@ -1920,12 +2059,14 @@ class _ConnectPanel extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onPickFile;
   final VoidCallback onAddYoutube;
+  final VoidCallback onAddApp;
 
   const _ConnectPanel({
     required this.node,
     required this.onClose,
     required this.onPickFile,
     required this.onAddYoutube,
+    required this.onAddApp,
   });
 
   @override
@@ -1989,6 +2130,25 @@ class _ConnectPanel extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '유튜브 링크',
+                        style: TextStyle(fontSize: 12, color: cs.onSurface, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            InkWell(
+              onTap: onAddApp,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                child: Row(
+                  children: [
+                    Icon(Icons.apps_rounded, size: 14, color: Colors.indigo.shade400),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '앱 연결',
                         style: TextStyle(fontSize: 12, color: cs.onSurface, fontWeight: FontWeight.w500),
                       ),
                     ),
@@ -2102,6 +2262,7 @@ class _FilePreview extends StatelessWidget {
 
   bool get _isImage => _imageExtensions.contains(file.extension.toLowerCase());
   bool get _isYoutube => file.extension == 'youtube';
+  bool get _isApp => file.extension == 'app';
 
   @override
   Widget build(BuildContext context) {
@@ -2129,7 +2290,13 @@ class _FilePreview extends StatelessWidget {
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(_isYoutube ? Icons.smart_display : _iconForExtension(file.extension), size: 48),
+                        _isApp
+                            ? Text(
+                                _kApps.firstWhere((a) => a.name == file.name,
+                                    orElse: () => _AppInfo(file.name, file.path, '📱', '')).emoji,
+                                style: const TextStyle(fontSize: 42),
+                              )
+                            : Icon(_isYoutube ? Icons.smart_display : _iconForExtension(file.extension), size: 48),
                         const SizedBox(height: 8),
                         Text(
                           file.name,
@@ -2138,6 +2305,15 @@ class _FilePreview extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
+                        if (_isApp) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            file.path,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 9, color: Colors.grey),
+                          ),
+                        ],
                       ],
                     ),
             ),
@@ -2151,10 +2327,15 @@ class _FilePreview extends StatelessWidget {
                 ),
                 onPressed: _isYoutube
                     ? () => _openYoutubeLink(context)
-                    : () => _openFullScreen(context),
-                icon: Icon(_isYoutube ? Icons.open_in_new : Icons.fullscreen, size: 16),
+                    : _isApp
+                        ? () => _openAppLink(context)
+                        : () => _openFullScreen(context),
+                icon: Icon(
+                  _isYoutube || _isApp ? Icons.open_in_new : Icons.fullscreen,
+                  size: 16,
+                ),
                 label: Text(
-                  _isYoutube ? 'YouTube에서 열기' : '전체보기',
+                  _isYoutube ? 'YouTube에서 열기' : _isApp ? '앱 열기' : '전체보기',
                   style: const TextStyle(fontSize: 12),
                 ),
               ),
@@ -2180,6 +2361,17 @@ class _FilePreview extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('링크를 열 수 없습니다')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openAppLink(BuildContext context) async {
+    final uri = Uri.tryParse(file.path);
+    if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('"${file.name}" 앱을 열 수 없습니다. 앱이 설치되어 있는지 확인하세요.')),
         );
       }
     }
@@ -3641,4 +3833,186 @@ class _BgPreviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BgPreviewPainter old) => old.bg != bg;
+}
+
+// ── 앱 선택 다이얼로그 ──────────────────────────────────────
+class _AppPickerDialog extends StatefulWidget {
+  const _AppPickerDialog();
+  @override
+  State<_AppPickerDialog> createState() => _AppPickerDialogState();
+}
+
+class _AppPickerDialogState extends State<_AppPickerDialog>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final _searchController = TextEditingController();
+  String _query = '';
+  final _customSchemeController = TextEditingController();
+
+  static const _categories = ['전체', 'SNS', '생산성', '미디어', '교육', '쇼핑/금융', '지도/교통', '건강', '기타'];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: _categories.length, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    _customSchemeController.dispose();
+    super.dispose();
+  }
+
+  List<_AppInfo> _filtered(String category) {
+    final q = _query.toLowerCase();
+    return _kApps.where((a) {
+      final catOk = category == '전체' || a.category == category;
+      final nameOk = q.isEmpty || a.name.toLowerCase().contains(q);
+      return catOk && nameOk;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: SizedBox(
+        width: 480,
+        height: 560,
+        child: Column(
+          children: [
+            // 헤더
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.apps_rounded, color: cs.primary, size: 22),
+                  const SizedBox(width: 8),
+                  Text('앱 연결', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    iconSize: 20,
+                  ),
+                ],
+              ),
+            ),
+            // 검색
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '앱 이름 검색...',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  isDense: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            // 탭
+            TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: const TextStyle(fontSize: 12),
+              tabs: _categories.map((c) => Tab(text: c)).toList(),
+            ),
+            // 앱 그리드
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: _categories.map((cat) {
+                  final apps = _filtered(cat);
+                  return apps.isEmpty
+                      ? const Center(child: Text('검색 결과 없음', style: TextStyle(color: Colors.grey)))
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 0.85,
+                          ),
+                          itemCount: apps.length,
+                          itemBuilder: (context, i) {
+                            final app = apps[i];
+                            return InkWell(
+                              onTap: () => Navigator.pop(context, app),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(app.emoji, style: const TextStyle(fontSize: 28)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      app.name,
+                                      maxLines: 2,
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                }).toList(),
+              ),
+            ),
+            // 직접 입력
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _customSchemeController,
+                      decoration: InputDecoration(
+                        hintText: '직접 입력: 앱이름::url스킴://',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        isDense: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                    onPressed: () {
+                      final text = _customSchemeController.text.trim();
+                      if (text.isEmpty) return;
+                      final parts = text.split('::');
+                      final name = parts.length >= 2 ? parts[0].trim() : text;
+                      final scheme = parts.length >= 2 ? parts[1].trim() : text;
+                      Navigator.pop(context, _AppInfo(name, scheme, '📱', '기타'));
+                    },
+                    child: const Text('추가', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
