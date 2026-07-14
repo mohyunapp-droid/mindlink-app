@@ -2454,6 +2454,8 @@ class _LassoState extends ChangeNotifier {
   }
 }
 
+enum _CanvasBg { blank, dots, lines, grid, diagonal }
+
 // 드로잉 상태만 분리 — ChangeNotifier로 캔버스만 repaint, 전체 rebuild 없음
 class _DrawingState extends ChangeNotifier {
   final List<Stroke> strokes;
@@ -2590,6 +2592,9 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   bool _imageSelected = false;
   final List<_EditorImage> _images = [];
   int _selectedImageIndex = -1;
+
+  // 캔버스 배경
+  _CanvasBg _canvasBg = _CanvasBg.blank;
 
   // 지우개
   double _eraserSize = 20.0; // 캔버스 좌표 반지름
@@ -3115,10 +3120,15 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                 ),
                 // 크기 행 — 지우개 모드일 때는 지우개 크기 표시
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
                   child: _erasing
                       ? _buildEraserSizeRow(context)
                       : _buildPenSizeRow(context),
+                ),
+                // 배경 선택 행
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: _buildBgRow(context),
                 ),
               ],
             ),
@@ -3146,6 +3156,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                           images: _images,
                           lassoState: _lassoState,
                           lassoSelectedIndices: _lassoState.selectedIndices,
+                          canvasBg: _canvasBg,
                         ),
                       ),
                       ..._buildImageHandles(),
@@ -3288,6 +3299,73 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     );
   }
 
+  Widget _buildBgRow(BuildContext context) {
+    const options = [
+      (_CanvasBg.blank,    '백지',  Icons.crop_landscape_rounded),
+      (_CanvasBg.dots,     '점',    Icons.grain_rounded),
+      (_CanvasBg.lines,    '줄',    Icons.format_list_bulleted_rounded),
+      (_CanvasBg.grid,     '모눈',  Icons.grid_4x4_rounded),
+      (_CanvasBg.diagonal, '사선',  Icons.expand_rounded),
+    ];
+    return Row(
+      children: [
+        const Text('배경', style: TextStyle(fontSize: 11, color: Colors.grey)),
+        const SizedBox(width: 8),
+        for (final (bg, label, icon) in options)
+          GestureDetector(
+            onTap: () => setState(() => _canvasBg = bg),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 52,
+              height: 32,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: _canvasBg == bg
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: _canvasBg == bg
+                    ? Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5), width: 1.5)
+                    : Border.all(color: Colors.grey.withValues(alpha: 0.25), width: 1),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: Stack(
+                  children: [
+                    // 미리보기
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _BgPreviewPainter(bg),
+                      ),
+                    ),
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(icon, size: 12,
+                            color: _canvasBg == bg
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey.shade500),
+                          const SizedBox(height: 1),
+                          Text(label, style: TextStyle(
+                            fontSize: 8,
+                            color: _canvasBg == bg
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey.shade500,
+                            fontWeight: _canvasBg == bg ? FontWeight.w700 : FontWeight.normal,
+                          )),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   void _moveImage(Offset delta) {
     if (_selectedImageIndex < 0 || _selectedImageIndex >= _images.length) return;
     setState(() {
@@ -3383,12 +3461,14 @@ class _StrokePainter extends CustomPainter {
   final List<_EditorImage> images;
   final _LassoState? lassoState;
   final List<int> lassoSelectedIndices;
+  final _CanvasBg canvasBg;
 
   _StrokePainter({
     required this.drawing,
     this.images = const [],
     this.lassoState,
     this.lassoSelectedIndices = const [],
+    this.canvasBg = _CanvasBg.blank,
   }) : super(
             repaint: lassoState != null
                 ? Listenable.merge([drawing, lassoState])
@@ -3396,7 +3476,10 @@ class _StrokePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
+    final w = size.width.isFinite ? size.width : 4000.0;
+    final h = size.height.isFinite ? size.height : 4000.0;
+    canvas.drawRect(Offset.zero & Size(w, h), Paint()..color = Colors.white);
+    _paintBg(canvas, w, h);
     for (final img in images) {
       paintImage(canvas: canvas, rect: img.rect, image: img.decoded, fit: BoxFit.fill);
     }
@@ -3448,6 +3531,46 @@ class _StrokePainter extends CustomPainter {
     }
   }
 
+  void _paintBg(Canvas canvas, double w, double h) {
+    if (canvasBg == _CanvasBg.blank) return;
+    const spacing = 30.0;
+    final dotPaint = Paint()..color = const Color(0xFFBBBBBB);
+    final linePaint = Paint()
+      ..color = const Color(0xFFD0D0D0)
+      ..strokeWidth = 0.6;
+
+    switch (canvasBg) {
+      case _CanvasBg.blank:
+        break;
+      case _CanvasBg.dots:
+        for (double x = spacing; x <= w; x += spacing) {
+          for (double y = spacing; y <= h; y += spacing) {
+            canvas.drawCircle(Offset(x, y), 1.4, dotPaint);
+          }
+        }
+      case _CanvasBg.lines:
+        for (double y = spacing; y <= h; y += spacing) {
+          canvas.drawLine(Offset(0, y), Offset(w, y), linePaint);
+        }
+      case _CanvasBg.grid:
+        for (double y = spacing; y <= h; y += spacing) {
+          canvas.drawLine(Offset(0, y), Offset(w, y), linePaint);
+        }
+        for (double x = spacing; x <= w; x += spacing) {
+          canvas.drawLine(Offset(x, 0), Offset(x, h), linePaint);
+        }
+      case _CanvasBg.diagonal:
+        // 45도 대각선 — 화면 왼쪽 위부터 오른쪽 아래 방향
+        for (double d = -h; d <= w; d += spacing) {
+          canvas.drawLine(
+            Offset(d < 0 ? 0 : d, d < 0 ? -d : 0),
+            Offset(d + h > w ? w : d + h, d + h > w ? w - d : h),
+            linePaint,
+          );
+        }
+    }
+  }
+
   void _paintStroke(Canvas canvas, Stroke stroke) {
     if (stroke.points.length < 2) return;
     final isHighlight = stroke.color.a < 0.9;
@@ -3477,5 +3600,58 @@ class _StrokePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _StrokePainter oldDelegate) => true;
+  bool shouldRepaint(covariant _StrokePainter oldDelegate) =>
+      oldDelegate.canvasBg != canvasBg || true;
+}
+
+// 배경 선택 버튼의 미리보기 painter
+class _BgPreviewPainter extends CustomPainter {
+  final _CanvasBg bg;
+  const _BgPreviewPainter(this.bg);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
+    if (bg == _CanvasBg.blank) return;
+
+    const spacing = 8.0;
+    final dotPaint = Paint()..color = const Color(0xFFBBBBBB);
+    final linePaint = Paint()
+      ..color = const Color(0xFFCCCCCC)
+      ..strokeWidth = 0.5;
+
+    switch (bg) {
+      case _CanvasBg.blank:
+        break;
+      case _CanvasBg.dots:
+        for (double x = spacing; x < size.width; x += spacing) {
+          for (double y = spacing; y < size.height; y += spacing) {
+            canvas.drawCircle(Offset(x, y), 0.8, dotPaint);
+          }
+        }
+      case _CanvasBg.lines:
+        for (double y = spacing; y < size.height; y += spacing) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+        }
+      case _CanvasBg.grid:
+        for (double y = spacing; y < size.height; y += spacing) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+        }
+        for (double x = spacing; x < size.width; x += spacing) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+        }
+      case _CanvasBg.diagonal:
+        for (double d = -size.height; d <= size.width; d += spacing) {
+          canvas.drawLine(
+            Offset(d < 0 ? 0 : d, d < 0 ? -d : 0),
+            Offset(d + size.height > size.width ? size.width : d + size.height,
+                   d + size.height > size.width ? size.width - d : size.height),
+            linePaint,
+          );
+        }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BgPreviewPainter old) => old.bg != bg;
 }
