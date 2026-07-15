@@ -1205,6 +1205,14 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                                 ],
                                 isHighlighted: _hoverTarget?.id == node.id,
                                 isSelected: _selectedNodeIds.contains(node.id),
+                                isSelectMode: _selectedNodeIds.isNotEmpty,
+                                onSelectIconTap: () {
+                                  if (_selectedNodeIds.isEmpty) {
+                                    _enterSelectMode(node);
+                                  } else {
+                                    _toggleSelect(node);
+                                  }
+                                },
                                     ),
                                   ),
                                 ),
@@ -1669,6 +1677,8 @@ class _NodeWidget extends StatelessWidget {
   final List<MindNode> crossLinkedNodes;
   final bool isHighlighted;
   final bool isSelected;
+  final bool isSelectMode;
+  final VoidCallback onSelectIconTap;
 
   const _NodeWidget({
     required this.node,
@@ -1692,6 +1702,8 @@ class _NodeWidget extends StatelessWidget {
     required this.crossLinkedNodes,
     required this.isHighlighted,
     required this.isSelected,
+    required this.isSelectMode,
+    required this.onSelectIconTap,
   });
 
   @override
@@ -1718,6 +1730,40 @@ class _NodeWidget extends StatelessWidget {
               : null,
           child: _buildCard(context, hasCategory),
         ),
+        // 좌측상단 다중선택 아이콘
+        if (isSelectMode || isSelected)
+          Positioned(
+            left: -10,
+            top: -10,
+            child: GestureDetector(
+              onTap: onSelectIconTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: isSelected
+                    ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                    : null,
+              ),
+            ),
+          ),
         Positioned(
           right: -8,
           top: -8,
