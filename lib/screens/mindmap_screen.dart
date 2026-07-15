@@ -1730,9 +1730,8 @@ class _NodeWidget extends StatelessWidget {
               : null,
           child: _buildCard(context, hasCategory),
         ),
-        // 좌측상단 다중선택 아이콘
-        if (isSelectMode || isSelected)
-          Positioned(
+        // 좌측상단 다중선택 아이콘 (항상 표시)
+        Positioned(
             left: -10,
             top: -10,
             child: GestureDetector(
@@ -1744,16 +1743,18 @@ class _NodeWidget extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary
-                      : Colors.white,
+                      : Colors.white.withValues(alpha: 0.85),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 2,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey.withValues(alpha: 0.45),
+                    width: isSelected ? 2 : 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 4,
+                      color: Colors.black.withValues(alpha: 0.10),
+                      blurRadius: 3,
                       offset: const Offset(0, 1),
                     ),
                   ],
