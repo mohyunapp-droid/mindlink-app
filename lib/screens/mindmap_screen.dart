@@ -619,8 +619,6 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
     for (final other in _nodes) {
       if (other.id == draggedNode.id) continue;
       if (isGroupDrag && _selectedNodeIds.contains(other.id)) continue;
-      // Skip targets that are a descendant of ANY node in the dragged group
-      // (not just the node being held), to avoid creating a parent/child cycle.
       final isDescendantOfGroup = groupIds.any((id) {
         final groupNode = _nodeById(id);
         return groupNode != null && _isAncestorOf(groupNode, other);
@@ -632,25 +630,12 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
       }
     }
 
-    if (candidate?.id == _hoverTarget?.id) {
-      if (candidate == null) {
-        _hoverTimer?.cancel();
-        _hoverTimer = null;
-      }
-      return;
-    }
-
-    _hoverTimer?.cancel();
-    if (_hoverTarget != null) {
-      setState(() => _hoverTarget = null);
-    }
-
-    if (candidate == null) return;
-
-    _hoverTimer = Timer(const Duration(seconds: 2), () {
-      if (!mounted) return;
+    // 겹치는 즉시 하이라이트 표시 (타이머 없음)
+    if (candidate?.id != _hoverTarget?.id) {
+      _hoverTimer?.cancel();
+      _hoverTimer = null;
       setState(() => _hoverTarget = candidate);
-    });
+    }
   }
 
   void _finishNodeDrag(MindNode node) {
@@ -715,9 +700,10 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
         if (delta != null) moved.position += delta;
       }
 
-      _selectedNodeIds.clear();
       _hoverTarget = null;
     });
+    // 드롭 후 선택 해제 (다음 동작을 위해)
+    setState(() => _selectedNodeIds.clear());
   }
 
   String _groupRootId(String id, Set<String> groupIds) {
