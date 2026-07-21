@@ -255,7 +255,10 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
       final list = jsonDecode(raw) as List;
       final loaded = list.map((e) => MindNode.fromJson(e as Map<String, dynamic>)).toList();
       if (mounted) setState(() { _nodes.addAll(loaded); });
-    } catch (_) {}
+    } catch (e) {
+      // 데이터 파싱 실패 시 초기화해서 무한 크래시 방지
+      await prefs.remove(_kStorageKey);
+    }
   }
 
   Future<void> _saveNodes() async {

@@ -22,7 +22,7 @@ class LinkedFile {
         'name': name,
         'path': path,
         'extension': extension,
-        'bytes': bytes != null ? base64Encode(bytes!) : null,
+        // bytes는 저장 안 함 — 대용량 데이터가 SharedPreferences에 쌓이면 iOS 재시작 시 크래시
       };
 
   factory LinkedFile.fromJson(Map<String, dynamic> json) => LinkedFile(
@@ -30,7 +30,7 @@ class LinkedFile {
         name: json['name'] as String,
         path: json['path'] as String,
         extension: json['extension'] as String,
-        bytes: json['bytes'] != null ? base64Decode(json['bytes'] as String) : null,
+        bytes: null, // 저장하지 않으므로 항상 null
       );
 }
 
