@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/mindmap_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   runApp(const MindLinkApp());
@@ -16,7 +16,7 @@ class MindLinkApp extends StatelessWidget {
         colorSchemeSeed: Colors.indigo,
         useMaterial3: true,
       ),
-      home: const MindMapScreen(),
+      home: const HomeScreen(),
     );
   }
 }

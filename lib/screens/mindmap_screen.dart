@@ -132,7 +132,8 @@ const double _canvasExtent = 100000;
 const Offset _canvasCenter = Offset(_canvasExtent / 2, _canvasExtent / 2);
 
 class MindMapScreen extends StatefulWidget {
-  const MindMapScreen({super.key});
+  final String storageKey;
+  const MindMapScreen({super.key, this.storageKey = 'mindlink_nodes_v1'});
 
   @override
   State<MindMapScreen> createState() => _MindMapScreenState();
@@ -239,7 +240,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
     _focusOn(match.position);
   }
 
-  static const _kStorageKey = 'mindlink_nodes_v1';
+  String get _kStorageKey => widget.storageKey;
 
   @override
   void initState() {
