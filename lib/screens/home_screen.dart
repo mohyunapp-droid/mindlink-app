@@ -130,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await MindMapFile.saveAll(_files);
   }
 
-  Future<void> _exportFile(MindMapFile file) async {
+  Future<void> _exportFile(MindMapFile file, BuildContext ctx) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final nodesJson = prefs.getString(file.storageKey) ?? '[]';
@@ -142,9 +142,11 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       if (kIsWeb) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('내보내기는 앱에서만 지원됩니다')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('내보내기는 앱에서만 지원됩니다')),
+          );
+        }
         return;
       }
 
@@ -153,9 +155,17 @@ class _HomeScreenState extends State<HomeScreen> {
       final path = '${dir.path}/$safeName.mindlink';
       await File(path).writeAsString(export);
 
+      // iPad는 공유 시트 앵커 위치가 필요함
+      final box = ctx.findRenderObject() as RenderBox?;
+      final size = MediaQuery.of(context).size;
+      final origin = box != null
+          ? box.localToGlobal(Offset.zero) & box.size
+          : Rect.fromLTWH(size.width / 2 - 1, size.height / 2 - 1, 2, 2);
+
       await Share.shareXFiles(
         [XFile(path, mimeType: 'application/json')],
         subject: '${file.name}.mindlink',
+        sharePositionOrigin: origin,
       );
     } catch (e) {
       if (mounted) {
@@ -314,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () => _openFile(_files[i]),
                     onRename: () => _renameFile(_files[i]),
                     onDelete: () => _deleteFile(_files[i]),
-                    onExport: () => _exportFile(_files[i]),
+                    onExport: (ctx) => _exportFile(_files[i], ctx),
                   ),
                 ),
       floatingActionButton: FloatingActionButton.large(
@@ -331,7 +341,7 @@ class _FileCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onRename;
   final VoidCallback onDelete;
-  final VoidCallback onExport;
+  final void Function(BuildContext) onExport;
 
   const _FileCard({
     required this.file,
@@ -429,7 +439,7 @@ class _FileCard extends StatelessWidget {
               subtitle: const Text('Google Drive, Dropbox 등에 저장'),
               onTap: () {
                 Navigator.pop(ctx);
-                onExport();
+                onExport(ctx);
               },
             ),
             const Divider(height: 1),
