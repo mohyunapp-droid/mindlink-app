@@ -1,5 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/mindmap_file.dart';
 import 'mindmap_screen.dart';
 
@@ -123,6 +130,92 @@ class _HomeScreenState extends State<HomeScreen> {
     await MindMapFile.saveAll(_files);
   }
 
+  Future<void> _exportFile(MindMapFile file) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nodesJson = prefs.getString(file.storageKey) ?? '[]';
+
+      final export = jsonEncode({
+        'version': 1,
+        'file': file.toJson(),
+        'nodes': jsonDecode(nodesJson),
+      });
+
+      if (kIsWeb) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('내보내기는 앱에서만 지원됩니다')),
+        );
+        return;
+      }
+
+      final dir = await getTemporaryDirectory();
+      final safeName = file.name.replaceAll(RegExp(r'[^\w가-힣]'), '_');
+      final path = '${dir.path}/$safeName.mindlink';
+      await File(path).writeAsString(export);
+
+      await Share.shareXFiles(
+        [XFile(path, mimeType: 'application/json')],
+        subject: '${file.name}.mindlink',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('내보내기 실패: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _importFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mindlink', 'json'],
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final bytes = result.files.first.bytes;
+      String raw;
+      if (bytes != null) {
+        raw = utf8.decode(bytes);
+      } else {
+        final path = result.files.first.path;
+        if (path == null) return;
+        raw = await File(path).readAsString();
+      }
+
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final fileData = data['file'] as Map<String, dynamic>;
+      final nodesData = data['nodes'];
+
+      final now = DateTime.now();
+      final newFile = MindMapFile(
+        id: const Uuid().v4(),
+        name: '${fileData['name']} (가져옴)',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(newFile.storageKey, jsonEncode(nodesData));
+
+      setState(() => _files.add(newFile));
+      await MindMapFile.saveAll(_files);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('"${newFile.name}" 가져오기 완료')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('가져오기 실패: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _deleteFile(MindMapFile file) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -169,6 +262,13 @@ class _HomeScreenState extends State<HomeScreen> {
             color: cs.primary,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.file_download_outlined),
+            tooltip: '파일 가져오기',
+            onPressed: _importFile,
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -214,6 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () => _openFile(_files[i]),
                     onRename: () => _renameFile(_files[i]),
                     onDelete: () => _deleteFile(_files[i]),
+                    onExport: () => _exportFile(_files[i]),
                   ),
                 ),
       floatingActionButton: FloatingActionButton.large(
@@ -230,6 +331,7 @@ class _FileCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onRename;
   final VoidCallback onDelete;
+  final VoidCallback onExport;
 
   const _FileCard({
     required this.file,
@@ -237,6 +339,7 @@ class _FileCard extends StatelessWidget {
     required this.onTap,
     required this.onRename,
     required this.onDelete,
+    required this.onExport,
   });
 
   @override
@@ -320,6 +423,16 @@ class _FileCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.share_rounded),
+              title: const Text('공유 / 내보내기'),
+              subtitle: const Text('Google Drive, Dropbox 등에 저장'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onExport();
+              },
+            ),
+            const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.drive_file_rename_outline_rounded),
               title: const Text('이름 변경'),
