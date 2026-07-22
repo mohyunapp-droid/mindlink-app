@@ -152,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final dir = await getTemporaryDirectory();
       final safeName = file.name.replaceAll(RegExp(r'[^\w가-힣]'), '_');
-      final path = '${dir.path}/$safeName.mindlink';
+      final path = '${dir.path}/$safeName.mindlink.json';
       await File(path).writeAsString(export);
 
       // iPad는 공유 시트 앵커 위치가 필요함
@@ -164,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       await Share.shareXFiles(
         [XFile(path, mimeType: 'application/json')],
-        subject: '${file.name}.mindlink',
+        subject: '${file.name}.mindlink.json',
         sharePositionOrigin: origin,
       );
     } catch (e) {
@@ -179,8 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _importFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['mindlink', 'json'],
+        type: FileType.any,
       );
       if (result == null || result.files.isEmpty) return;
 
