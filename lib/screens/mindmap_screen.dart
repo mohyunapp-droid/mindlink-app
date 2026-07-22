@@ -270,6 +270,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
 
   @override
   void dispose() {
+    _saveNodes(); // 화면 나갈 때 안전망 저장
     _transformController.dispose();
     _focusAnimController.dispose();
     _hoverTimer?.cancel();
@@ -812,6 +813,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
     for (final root in topLevel) {
       _alignDescendantsHorizontally(root);
     }
+    _saveNodes();
   }
 
   void _toggleCollapse(MindNode node) {
@@ -829,6 +831,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
         _shiftSubtree(children[i], delta);
       }
     });
+    _saveNodes();
   }
 
   void _shiftSubtree(MindNode node, Offset delta) {
@@ -1184,7 +1187,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                                 onNotesTap: () => _openNotesList(node),
                                 onHomeTap: _goHome,
                                 onToggleCollapse: () => _toggleCollapse(node),
-                                onAlignTap: () => _alignDescendantsHorizontally(node),
+                                onAlignTap: () { _alignDescendantsHorizontally(node); _saveNodes(); },
                                 onSortTap: () => _sortChildrenAlphabetically(node),
                                 onCrossLinkTap: () => _searchAndLinkNode(node),
                                 onCrossLinkNodesTap: () => _showCrossLinkPanel(node),
