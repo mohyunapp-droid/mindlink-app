@@ -47,6 +47,12 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>마인드맵 노드에 사진을 추가하기 위해 카메라를 사용합니다.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>마인드맵 노드에 사진을 추가하기 위해 사진 라이브러리에 접근합니다.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>마인드맵에서 사진을 저장합니다.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
