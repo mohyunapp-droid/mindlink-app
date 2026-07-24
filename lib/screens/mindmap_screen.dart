@@ -153,6 +153,17 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
   );
   Animation<Matrix4>? _focusAnimation;
 
+  // 노드 도착 강조 (펄스)
+  String? _highlightedNodeId;
+  late final AnimationController _pulseController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+  late final Animation<double> _pulseAnim = CurvedAnimation(
+    parent: _pulseController,
+    curve: Curves.easeInOut,
+  );
+
   void _setCanvasPanEnabled(bool enabled) {
     if (_canvasPanEnabled == enabled) return;
     setState(() => _canvasPanEnabled = enabled);
@@ -177,6 +188,23 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
   }
 
   void _goHome() => _focusOn(_canvasCenter);
+
+  void _focusOnNode(MindNode target) {
+    _focusOn(target.position);
+    // 이동 애니메이션 끝난 뒤 펄스 시작
+    Future.delayed(const Duration(milliseconds: 480), () {
+      if (!mounted) return;
+      setState(() => _highlightedNodeId = target.id);
+      _pulseController.forward(from: 0).then((_) {
+        if (!mounted) return;
+        // 한 번 더 역방향으로 fade out
+        _pulseController.reverse().then((_) {
+          if (!mounted) return;
+          setState(() => _highlightedNodeId = null);
+        });
+      });
+    });
+  }
 
   void _zoomBy(double factor) {
     if (_viewportSize.width == 0 || _viewportSize.height == 0) return;
@@ -273,6 +301,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
     _saveNodes(); // 화면 나갈 때 안전망 저장
     _transformController.dispose();
     _focusAnimController.dispose();
+    _pulseController.dispose();
     _hoverTimer?.cancel();
     super.dispose();
   }
@@ -1166,7 +1195,10 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                                   child: AnimatedScale(
                                     duration: const Duration(milliseconds: 350),
                                     scale: _isHiddenByCollapse(node) ? 0.2 : 1,
-                                    child: _NodeWidget(
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        _NodeWidget(
                                 node: node,
                                 onTap: () => _selectedNodeIds.isNotEmpty
                                     ? _toggleSelect(node)
@@ -1206,6 +1238,32 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                                     _toggleSelect(node);
                                   }
                                 },
+                                        ),
+                                        if (_highlightedNodeId == node.id)
+                                          Positioned.fill(
+                                            child: IgnorePointer(
+                                              child: AnimatedBuilder(
+                                                animation: _pulseAnim,
+                                                builder: (ctx, _) => DecoratedBox(
+                                                  decoration: BoxDecoration(
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(
+                                                      color: Theme.of(ctx).colorScheme.primary.withValues(alpha: _pulseAnim.value),
+                                                      width: 3,
+                                                    ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Theme.of(ctx).colorScheme.primary.withValues(alpha: _pulseAnim.value * 0.5),
+                                                        blurRadius: 20 + _pulseAnim.value * 16,
+                                                        spreadRadius: _pulseAnim.value * 6,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -1390,7 +1448,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                           allNodes: _nodes,
                           onNavigate: (target) {
                             _closeCrossLinkPanel();
-                            _focusOn(target.position);
+                            _focusOnNode(target);
                           },
                           onDeleteLink: (targetId) {
                             setState(() {
