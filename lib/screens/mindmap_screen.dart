@@ -3793,8 +3793,10 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   }
 
   List<Widget> _buildImageHandles() {
-    const handleSize = 20.0;   // 시각적 크기
-    const hitSize = 52.0;      // 터치 감지 영역 (펜슬이 조금 벗어나도 잡힘)
+    const handleSize = 20.0; // 시각적 크기
+    const inner = 10.0;      // 꼭짓점 안쪽 여유
+    const outer = 44.0;      // 꼭짓점 바깥쪽 여유 (펜슬이 많이 벗어나도 잡힘)
+    const total = inner + outer;
     final widgets = <Widget>[];
 
     for (var i = 0; i < _images.length; i++) {
@@ -3802,23 +3804,37 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       final rect = img.rect;
       final isSelected = _imageSelected && _selectedImageIndex == i;
 
-      Widget resizeHandle(String id, double left, double top) => Positioned(
-        left: left - hitSize / 2,
-        top: top - hitSize / 2,
-        child: GestureDetector(
-          onPanUpdate: (d) => _resizeImage(id, d.delta),
-          child: SizedBox(
-            width: hitSize, height: hitSize,
-            child: Center(
-              child: Container(
-                width: handleSize, height: handleSize,
-                decoration: BoxDecoration(color: Colors.blue, shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2)),
-              ),
+      // 각 꼭짓점마다 바깥 방향으로 hit 영역을 치우쳐 배치
+      // dx/dy: -1 = 왼쪽/위, +1 = 오른쪽/아래 (바깥 방향)
+      Widget resizeHandle(String id, double cx, double cy, double dx, double dy) {
+        // 바깥 방향으로 outer, 안쪽으로 inner 만큼 영역 확장
+        final left = dx < 0 ? cx - outer : cx - inner;
+        final top  = dy < 0 ? cy - outer : cy - inner;
+        // 시각적 핸들 위치: hit box 안에서 꼭짓점 위치
+        final visualLeft = dx < 0 ? outer - handleSize / 2 : inner - handleSize / 2;
+        final visualTop  = dy < 0 ? outer - handleSize / 2 : inner - handleSize / 2;
+        return Positioned(
+          left: left, top: top,
+          child: GestureDetector(
+            onPanUpdate: (d) => _resizeImage(id, d.delta),
+            child: SizedBox(
+              width: total, height: total,
+              child: Stack(children: [
+                Positioned(
+                  left: visualLeft, top: visualTop,
+                  child: Container(
+                    width: handleSize, height: handleSize,
+                    decoration: BoxDecoration(
+                      color: Colors.blue, shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+              ]),
             ),
           ),
-        ),
-      );
+        );
+      }
 
       // 이미지 터치 영역
       // 고정 상태(isSelected=false)일 때는 translucent → 펜/터치가 Listener까지 통과
@@ -3840,10 +3856,10 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       // 크기 핸들 — 선택된 이미지만
       if (isSelected) {
         widgets.addAll([
-          resizeHandle('tl', rect.left, rect.top),
-          resizeHandle('tr', rect.right, rect.top),
-          resizeHandle('bl', rect.left, rect.bottom),
-          resizeHandle('br', rect.right, rect.bottom),
+          resizeHandle('tl', rect.left,  rect.top,    -1, -1),
+          resizeHandle('tr', rect.right, rect.top,     1, -1),
+          resizeHandle('bl', rect.left,  rect.bottom, -1,  1),
+          resizeHandle('br', rect.right, rect.bottom,  1,  1),
         ]);
         // 삭제 버튼 — 우측 상단
         widgets.add(Positioned(
