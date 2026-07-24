@@ -3806,11 +3806,10 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
 
       // 각 꼭짓점마다 바깥 방향으로 hit 영역을 치우쳐 배치
       // dx/dy: -1 = 왼쪽/위, +1 = 오른쪽/아래 (바깥 방향)
-      Widget resizeHandle(String id, double cx, double cy, double dx, double dy) {
-        // 바깥 방향으로 outer, 안쪽으로 inner 만큼 영역 확장
+      // angle: 화살표 회전 각도 (라디안, tl=225°, tr=315°, bl=135°, br=45°)
+      Widget resizeHandle(String id, double cx, double cy, double dx, double dy, double angle) {
         final left = dx < 0 ? cx - outer : cx - inner;
         final top  = dy < 0 ? cy - outer : cy - inner;
-        // 시각적 핸들 위치: hit box 안에서 꼭짓점 위치
         final visualLeft = dx < 0 ? outer - handleSize / 2 : inner - handleSize / 2;
         final visualTop  = dy < 0 ? outer - handleSize / 2 : inner - handleSize / 2;
         return Positioned(
@@ -3822,11 +3821,22 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
               child: Stack(children: [
                 Positioned(
                   left: visualLeft, top: visualTop,
-                  child: Container(
-                    width: handleSize, height: handleSize,
-                    decoration: BoxDecoration(
-                      color: Colors.blue, shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                  child: Transform.rotate(
+                    angle: angle,
+                    child: Container(
+                      width: handleSize, height: handleSize,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade600,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 4, offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.arrow_outward_rounded,
+                          color: Colors.white, size: 13),
                     ),
                   ),
                 ),
@@ -3856,10 +3866,10 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       // 크기 핸들 — 선택된 이미지만
       if (isSelected) {
         widgets.addAll([
-          resizeHandle('tl', rect.left,  rect.top,    -1, -1),
-          resizeHandle('tr', rect.right, rect.top,     1, -1),
-          resizeHandle('bl', rect.left,  rect.bottom, -1,  1),
-          resizeHandle('br', rect.right, rect.bottom,  1,  1),
+          resizeHandle('tl', rect.left,  rect.top,    -1, -1, -1.5708), // ↖ (↗에서 270°시계 = -90°)
+          resizeHandle('tr', rect.right, rect.top,     1, -1,  0),      // ↗ 원래 방향
+          resizeHandle('bl', rect.left,  rect.bottom, -1,  1,  3.14159),// ↙ (↗에서 180°)
+          resizeHandle('br', rect.right, rect.bottom,  1,  1,  1.5708), // ↘ (↗에서 90°시계)
         ]);
         // 삭제 버튼 — 우측 상단
         widgets.add(Positioned(
