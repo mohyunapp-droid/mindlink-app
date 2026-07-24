@@ -3831,6 +3831,28 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
           resizeHandle('bl', rect.left, rect.bottom),
           resizeHandle('br', rect.right, rect.bottom),
         ]);
+        // 삭제 버튼 — 우측 상단
+        widgets.add(Positioned(
+          left: rect.right - 14,
+          top: rect.top - 14,
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _images.removeAt(i);
+                _imageSelected = false;
+                _selectedImageIndex = -1;
+              });
+            },
+            child: Container(
+              width: 28, height: 28,
+              decoration: const BoxDecoration(
+                color: Colors.redAccent,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+            ),
+          ),
+        ));
         // 고정 힌트 라벨
         widgets.add(Positioned(
           left: rect.left, top: rect.top - 22,
