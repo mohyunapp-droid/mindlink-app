@@ -127,6 +127,8 @@ class MindNode {
   final List<String> connectedNodeIds;
   bool collapsed;
   final List<String> crossLinks;
+  Color? borderColor;
+  Color? backgroundColor;
 
   MindNode({
     required this.id,
@@ -138,6 +140,8 @@ class MindNode {
     List<HandwrittenNote>? notes,
     List<String>? connectedNodeIds,
     List<String>? crossLinks,
+    this.borderColor,
+    this.backgroundColor,
   })  : linkedFiles = linkedFiles ?? [],
         notes = notes ?? [],
         connectedNodeIds = connectedNodeIds ?? [],
@@ -154,6 +158,8 @@ class MindNode {
         'notes': notes.map((n) => n.toJson()).toList(),
         'connectedNodeIds': connectedNodeIds,
         'crossLinks': crossLinks,
+        if (borderColor != null) 'borderColor': borderColor!.toARGB32(),
+        if (backgroundColor != null) 'backgroundColor': backgroundColor!.toARGB32(),
       };
 
   factory MindNode.fromJson(Map<String, dynamic> json) => MindNode(
@@ -177,5 +183,7 @@ class MindNode {
         crossLinks: (json['crossLinks'] as List? ?? [])
             .map((e) => e as String)
             .toList(),
+        borderColor: json['borderColor'] != null ? Color(json['borderColor'] as int) : null,
+        backgroundColor: json['backgroundColor'] != null ? Color(json['backgroundColor'] as int) : null,
       );
 }

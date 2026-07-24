@@ -620,6 +620,24 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
     });
   }
 
+  void _applyBorderColor(Color? color) {
+    setState(() {
+      for (final node in _nodes.where((n) => _selectedNodeIds.contains(n.id))) {
+        node.borderColor = color;
+      }
+    });
+    _saveNodes();
+  }
+
+  void _applyBackgroundColor(Color? color) {
+    setState(() {
+      for (final node in _nodes.where((n) => _selectedNodeIds.contains(n.id))) {
+        node.backgroundColor = color;
+      }
+    });
+    _saveNodes();
+  }
+
   void _applyBoxSelect(Rect box) {
     setState(() {
       _selectedNodeIds.clear();
@@ -1309,7 +1327,7 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
               ),
             ),
           ),
-              // 다중 선택 배너
+              // 다중 선택 배너 + 색상 팔레트
               if (_selectedNodeIds.isNotEmpty)
                 Positioned(
                   top: 16,
@@ -1317,24 +1335,42 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
                   right: 0,
                   child: Center(
                     child: Material(
-                      elevation: 4,
+                      elevation: 6,
                       borderRadius: BorderRadius.circular(20),
-                      color: Theme.of(context).colorScheme.primary,
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Row(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${_selectedNodeIds.length}개 선택됨  •  드래그하여 이동',
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                            // 상단 타이틀 행
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_outline_rounded,
+                                    color: Theme.of(context).colorScheme.primary, size: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${_selectedNodeIds.length}개 선택됨  •  드래그하여 이동',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                GestureDetector(
+                                  onTap: _exitSelectMode,
+                                  child: Icon(Icons.close_rounded,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant, size: 18),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            GestureDetector(
-                              onTap: _exitSelectMode,
-                              child: const Icon(Icons.close_rounded, color: Colors.white70, size: 18),
+                            const SizedBox(height: 10),
+                            // 색상 팔레트 행
+                            _NodeColorPalette(
+                              onBorderColor: _applyBorderColor,
+                              onBackgroundColor: _applyBackgroundColor,
                             ),
                           ],
                         ),
@@ -1523,6 +1559,138 @@ class _MindMapScreenState extends State<MindMapScreen> with SingleTickerProvider
   }
 }
 
+
+// ─── 노드 색상 팔레트 ──────────────────────────────────────────────
+class _NodeColorPalette extends StatefulWidget {
+  final ValueChanged<Color?> onBorderColor;
+  final ValueChanged<Color?> onBackgroundColor;
+
+  const _NodeColorPalette({
+    required this.onBorderColor,
+    required this.onBackgroundColor,
+  });
+
+  @override
+  State<_NodeColorPalette> createState() => _NodeColorPaletteState();
+}
+
+class _NodeColorPaletteState extends State<_NodeColorPalette> {
+  static const _colors = [
+    Color(0xFFEF5350), // 빨강
+    Color(0xFFFF7043), // 주황
+    Color(0xFFFFCA28), // 노랑
+    Color(0xFF66BB6A), // 초록
+    Color(0xFF29B6F6), // 하늘
+    Color(0xFF5C6BC0), // 남색
+    Color(0xFFAB47BC), // 보라
+    Color(0xFFEC407A), // 분홍
+    Color(0xFF8D6E63), // 갈색
+    Color(0xFF78909C), // 회색
+  ];
+
+  bool _showBorder = true; // true=테두리, false=배경
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 탭 토글
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _TabBtn(label: '테두리', selected: _showBorder,
+                onTap: () => setState(() => _showBorder = true)),
+            const SizedBox(width: 6),
+            _TabBtn(label: '배경색', selected: !_showBorder,
+                onTap: () => setState(() => _showBorder = false)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // 색상 칩들
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 초기화(없음) 버튼
+            GestureDetector(
+              onTap: () => _showBorder
+                  ? widget.onBorderColor(null)
+                  : widget.onBackgroundColor(null),
+              child: Container(
+                width: 26,
+                height: 26,
+                margin: const EdgeInsets.only(right: 6),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.outline, width: 1.5),
+                ),
+                child: Icon(Icons.block_rounded, size: 14, color: cs.outline),
+              ),
+            ),
+            // 색상 팔레트
+            for (final c in _colors)
+              GestureDetector(
+                onTap: () => _showBorder
+                    ? widget.onBorderColor(c)
+                    : widget.onBackgroundColor(c),
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: c,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: c.withValues(alpha: 0.4),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TabBtn extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TabBtn({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? cs.primary : cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : cs.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
 
 class _BoxSelectPainter extends CustomPainter {
   final Offset start;
@@ -1860,23 +2028,26 @@ class _NodeWidget extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       width: 128,
       decoration: BoxDecoration(
-        gradient: isLight
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFFFFFFF), Color(0xFFF0F4FF)],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [cs.surfaceContainerHigh, cs.surfaceContainerHighest],
-              ),
+        color: node.backgroundColor,
+        gradient: node.backgroundColor != null
+            ? null
+            : isLight
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFFFFFF), Color(0xFFF0F4FF)],
+                  )
+                : LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [cs.surfaceContainerHigh, cs.surfaceContainerHighest],
+                  ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isHighlighted
               ? cs.error
-              : cs.primary.withValues(alpha: 0.18),
-          width: isHighlighted ? 2 : 1,
+              : node.borderColor ?? cs.primary.withValues(alpha: 0.18),
+          width: isHighlighted ? 2 : (node.borderColor != null ? 2 : 1),
         ),
         boxShadow: isHighlighted
             ? [
