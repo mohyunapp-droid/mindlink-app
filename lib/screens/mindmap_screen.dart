@@ -3793,7 +3793,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   }
 
   List<Widget> _buildImageHandles() {
-    const handleSize = 20.0;
+    const handleSize = 20.0;   // 시각적 크기
+    const hitSize = 52.0;      // 터치 감지 영역 (펜슬이 조금 벗어나도 잡힘)
     final widgets = <Widget>[];
 
     for (var i = 0; i < _images.length; i++) {
@@ -3802,14 +3803,19 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       final isSelected = _imageSelected && _selectedImageIndex == i;
 
       Widget resizeHandle(String id, double left, double top) => Positioned(
-        left: left - handleSize / 2,
-        top: top - handleSize / 2,
+        left: left - hitSize / 2,
+        top: top - hitSize / 2,
         child: GestureDetector(
           onPanUpdate: (d) => _resizeImage(id, d.delta),
-          child: Container(
-            width: handleSize, height: handleSize,
-            decoration: BoxDecoration(color: Colors.blue, shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2)),
+          child: SizedBox(
+            width: hitSize, height: hitSize,
+            child: Center(
+              child: Container(
+                width: handleSize, height: handleSize,
+                decoration: BoxDecoration(color: Colors.blue, shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2)),
+              ),
+            ),
           ),
         ),
       );
