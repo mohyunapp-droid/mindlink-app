@@ -3037,6 +3037,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   final Map<int, Offset> _pointerPositions = {};
   bool _isPinching = false;
   double? _lastPinchDistance;
+  Offset? _lastPinchMid;
 
   @override
   void initState() {
@@ -3128,12 +3129,16 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       final scaleDelta = dist / _lastPinchDistance!;
       final newScale = (_canvasScale * scaleDelta).clamp(0.25, 6.0);
       final ratio = newScale / _canvasScale;
-      // 핀치 중점이 고정되도록 오프셋 보정
+      // 핀치 중점 기준 스케일 보정 + 중점 이동(패닝) 반영
       _canvasOffset = mid - (mid - _canvasOffset) * ratio;
+      if (_lastPinchMid != null) {
+        _canvasOffset += mid - _lastPinchMid!;
+      }
       _canvasScale = newScale;
       setState(() {});
     }
     _lastPinchDistance = dist;
+    _lastPinchMid = mid;
   }
 
   void _cancelDrawingForPinch() {
@@ -3155,6 +3160,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       if (!_isPinching) {
         _isPinching = true;
         _lastPinchDistance = null;
+        _lastPinchMid = null;
         _cancelDrawingForPinch();
       }
       return;
@@ -3279,6 +3285,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       if (_pointerPositions.length < 2) {
         _isPinching = false;
         _lastPinchDistance = null;
+        _lastPinchMid = null;
         _activePointerId = null;
       }
       return;
@@ -3323,6 +3330,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       if (_pointerPositions.length < 2) {
         _isPinching = false;
         _lastPinchDistance = null;
+        _lastPinchMid = null;
         _activePointerId = null;
       }
       return;
