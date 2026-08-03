@@ -38,14 +38,16 @@ class Stroke {
   final Color color;
   final double width;
   final List<Offset> points;
+  final bool isMask; // 가리개 획
 
-  Stroke({required this.color, required this.width, List<Offset>? points})
+  Stroke({required this.color, required this.width, List<Offset>? points, this.isMask = false})
       : points = points ?? [];
 
   Map<String, dynamic> toJson() => {
         'color': color.toARGB32(),
         'width': width,
         'points': points.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+        if (isMask) 'isMask': true,
       };
 
   factory Stroke.fromJson(Map<String, dynamic> json) => Stroke(
@@ -54,6 +56,7 @@ class Stroke {
         points: (json['points'] as List)
             .map((p) => Offset((p['x'] as num).toDouble(), (p['y'] as num).toDouble()))
             .toList(),
+        isMask: json['isMask'] == true,
       );
 }
 

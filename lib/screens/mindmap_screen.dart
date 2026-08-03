@@ -2956,10 +2956,26 @@ class _DrawingState extends ChangeNotifier {
   }
 
   void eraseAt(Offset position, double radius) {
+    _eraseWhere(position, radius, maskOnly: false);
+  }
+
+  void eraseMaskAt(Offset position, double radius) {
+    _eraseWhere(position, radius, maskOnly: true);
+  }
+
+  void _eraseWhere(Offset position, double radius, {required bool maskOnly}) {
     final newStrokes = <Stroke>[];
     bool changed = false;
 
     for (final stroke in strokes) {
+      if (maskOnly && !stroke.isMask) {
+        newStrokes.add(stroke);
+        continue;
+      }
+      if (!maskOnly && stroke.isMask) {
+        newStrokes.add(stroke);
+        continue;
+      }
       final segments = _splitErase(stroke, position, radius);
       if (segments.length == 1 && identical(segments[0], stroke)) {
         newStrokes.add(stroke);
@@ -2987,7 +3003,7 @@ class _DrawingState extends ChangeNotifier {
     Stroke? seg;
     for (var i = 0; i < pts.length; i++) {
       if (keep[i]) {
-        seg ??= Stroke(color: stroke.color, width: stroke.width);
+        seg ??= Stroke(color: stroke.color, width: stroke.width, isMask: stroke.isMask);
         seg.points.add(pts[i]);
       } else {
         if (seg != null && seg.points.length >= 2) result.add(seg);
@@ -3042,6 +3058,9 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
   late TextEditingController _nameController;
   bool _erasing = false;
   bool _highlighting = false;
+  bool _masking = false;      // 가리개 모드
+  bool _maskErasing = false;  // 가리개 해제 모드
+  Color _maskColor = const Color(0xFF222222); // 가리개 색상
   bool _straightLine = false;
   bool _drawingEnabled = true;
   bool _lassoMode = false;
@@ -3254,15 +3273,25 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       _drawing.eraseAt(pos, _eraserSize);
       return;
     }
-    final color = _highlighting ? _penColor.withValues(alpha: 0.35) : _penColor;
-    final width = _highlighting ? _strokeWidth * 4 : _strokeWidth;
+    if (_maskErasing) {
+      setState(() => _eraserScreenPos = event.localPosition);
+      _drawing.eraseMaskAt(pos, _eraserSize * 2);
+      return;
+    }
+    final isMask = _masking;
+    final color = isMask
+        ? _maskColor.withValues(alpha: 1.0)
+        : _highlighting ? _penColor.withValues(alpha: 0.35) : _penColor;
+    final width = isMask
+        ? _strokeWidth * 5
+        : _highlighting ? _strokeWidth * 4 : _strokeWidth;
     if (_straightLine) {
       _straightLineStart = pos;
-      _drawing.startStroke(Stroke(color: color, width: width)
+      _drawing.startStroke(Stroke(color: color, width: width, isMask: isMask)
         ..points.add(pos)
         ..points.add(pos));
     } else {
-      _drawing.startStroke(Stroke(color: color, width: width)
+      _drawing.startStroke(Stroke(color: color, width: width, isMask: isMask)
         ..points.add(pos));
     }
   }
@@ -3297,6 +3326,11 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
     if (_erasing) {
       setState(() => _eraserScreenPos = event.localPosition);
       _drawing.eraseAt(pos, _eraserSize);
+      return;
+    }
+    if (_maskErasing) {
+      setState(() => _eraserScreenPos = event.localPosition);
+      _drawing.eraseMaskAt(pos, _eraserSize * 2);
       return;
     }
     if (_drawing.currentStroke == null) return;
@@ -3544,6 +3578,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _lassoMode = true;
                             _drawingEnabled = false;
                             _erasing = false;
+                            _masking = false;
+                            _maskErasing = false;
                             _straightLine = false;
                             _lassoState.reset();
                           }
@@ -3552,6 +3588,78 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                       const SizedBox(width: 4),
                       const SizedBox(height: 24, child: VerticalDivider(width: 1)),
                       const SizedBox(width: 4),
+                      // 가리개
+                      _toolBtn(context, icon: Icons.rectangle, label: '가리개',
+                        active: _masking,
+                        activeColor: Colors.grey.shade800,
+                        onTap: () => setState(() {
+                          _imageSelected = false; _selectedImageIndex = -1;
+                          _lassoMode = false; _lassoState.reset();
+                          if (_masking) {
+                            _masking = false;
+                            _drawingEnabled = false;
+                          } else {
+                            _masking = true;
+                            _maskErasing = false;
+                            _erasing = false;
+                            _highlighting = false;
+                            _drawingEnabled = true;
+                            _straightLine = false;
+                          }
+                        }),
+                      ),
+                      // 가리개 해제
+                      _toolBtn(context, icon: Icons.rectangle_outlined, label: '가리개 해제',
+                        active: _maskErasing,
+                        activeColor: Colors.brown,
+                        onTap: () => setState(() {
+                          _imageSelected = false; _selectedImageIndex = -1;
+                          _lassoMode = false; _lassoState.reset();
+                          if (_maskErasing) {
+                            _maskErasing = false;
+                            _drawingEnabled = false;
+                          } else {
+                            _maskErasing = true;
+                            _masking = false;
+                            _erasing = false;
+                            _highlighting = false;
+                            _drawingEnabled = false;
+                          }
+                        }),
+                      ),
+                      const SizedBox(width: 4),
+                      const SizedBox(height: 24, child: VerticalDivider(width: 1)),
+                      const SizedBox(width: 4),
+                      // 가리개 색상 선택 (가리개 모드일 때만)
+                      if (_masking) ...[
+                        for (final c in [
+                          const Color(0xFF111111),
+                          Colors.indigo.shade900,
+                          Colors.brown.shade900,
+                          Colors.teal.shade900,
+                        ])
+                          GestureDetector(
+                            onTap: () => setState(() => _maskColor = c),
+                            child: Container(
+                              width: 22, height: 22,
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              decoration: BoxDecoration(
+                                color: c,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _maskColor == c ? Colors.white : Colors.transparent,
+                                  width: 2,
+                                ),
+                                boxShadow: _maskColor == c
+                                    ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 4)]
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 4),
+                        const SizedBox(height: 24, child: VerticalDivider(width: 1)),
+                        const SizedBox(width: 4),
+                      ],
                       // 색상 팔레트
                       for (final color in [
                         Colors.black,
@@ -3986,10 +4094,18 @@ class _StrokePainter extends CustomPainter {
     for (final img in images) {
       paintImage(canvas: canvas, rect: img.rect, image: img.decoded, fit: BoxFit.fill);
     }
+    // 일반 획 (글씨, 하이라이트)
     for (var i = 0; i < drawing.strokes.length; i++) {
-      _paintStroke(canvas, drawing.strokes[i]);
+      if (!drawing.strokes[i].isMask) _paintStroke(canvas, drawing.strokes[i]);
     }
-    if (drawing.currentStroke != null) {
+    if (drawing.currentStroke != null && !drawing.currentStroke!.isMask) {
+      _paintStroke(canvas, drawing.currentStroke!);
+    }
+    // 가리개 획 — 글씨 위 레이어
+    for (var i = 0; i < drawing.strokes.length; i++) {
+      if (drawing.strokes[i].isMask) _paintStroke(canvas, drawing.strokes[i]);
+    }
+    if (drawing.currentStroke != null && drawing.currentStroke!.isMask) {
       _paintStroke(canvas, drawing.currentStroke!);
     }
     // 올가미 선택된 스트로크 강조
@@ -4083,6 +4199,19 @@ class _StrokePainter extends CustomPainter {
 
   void _paintStroke(Canvas canvas, Stroke stroke) {
     if (stroke.points.length < 2) return;
+    // 가리개: 완전 불투명 사각 획
+    if (stroke.isMask) {
+      final paint = Paint()
+        ..color = stroke.color.withValues(alpha: 1.0)
+        ..strokeWidth = stroke.width
+        ..strokeCap = StrokeCap.square
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
+      for (var i = 0; i < stroke.points.length - 1; i++) {
+        canvas.drawLine(stroke.points[i], stroke.points[i + 1], paint);
+      }
+      return;
+    }
     final isHighlight = stroke.color.a < 0.9;
     final paint = Paint()
       ..color = isHighlight ? stroke.color.withValues(alpha: 1) : stroke.color
