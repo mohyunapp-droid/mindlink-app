@@ -3321,16 +3321,17 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       return;
     }
 
+    // 가리개 해제는 _drawingEnabled 와 무관하게 항상 동작
+    if (_maskErasing) {
+      setState(() => _eraserScreenPos = event.localPosition);
+      _drawing.eraseMaskAt(pos, _eraserSize * 2);
+      return;
+    }
     if (!_drawingEnabled) return;
     if (_pointerOnImage) return;
     if (_erasing) {
       setState(() => _eraserScreenPos = event.localPosition);
       _drawing.eraseAt(pos, _eraserSize);
-      return;
-    }
-    if (_maskErasing) {
-      setState(() => _eraserScreenPos = event.localPosition);
-      _drawing.eraseMaskAt(pos, _eraserSize * 2);
       return;
     }
     if (_drawing.currentStroke == null) return;
