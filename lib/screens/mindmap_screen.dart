@@ -2153,6 +2153,36 @@ class _NodeWidget extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (node.notes.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Listener(
+                        onPointerDown: (_) => onDragStart(),
+                        onPointerUp: (_) => onDragEnd(),
+                        onPointerCancel: (_) => onDragEnd(),
+                        child: InkWell(
+                          onTap: onNotesTap,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.edit_note_rounded, size: 11, color: Colors.teal),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '${node.notes.length}개 메모',
+                                  style: const TextStyle(fontSize: 10, color: Colors.teal, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (crossLinkedNodes.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Listener(
