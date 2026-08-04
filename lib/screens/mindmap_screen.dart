@@ -2992,8 +2992,29 @@ class _DrawingState extends ChangeNotifier {
     }
   }
 
+  // Interpolate points along a stroke so partial erasing works even on 2-point straight lines
+  List<Offset> _densify(List<Offset> points, double maxStep) {
+    if (points.length < 2) return points;
+    final result = <Offset>[];
+    for (var i = 0; i < points.length - 1; i++) {
+      final a = points[i];
+      final b = points[i + 1];
+      result.add(a);
+      final dist = (b - a).distance;
+      if (dist > maxStep) {
+        final steps = (dist / maxStep).ceil();
+        for (var s = 1; s < steps; s++) {
+          result.add(Offset.lerp(a, b, s / steps)!);
+        }
+      }
+    }
+    result.add(points.last);
+    return result;
+  }
+
   List<Stroke> _splitErase(Stroke stroke, Offset center, double radius) {
-    final pts = stroke.points;
+    // Densify so 2-point straight lines can be partially erased
+    final pts = _densify(stroke.points, radius * 0.4);
     final keep = [for (final p in pts) (p - center).distance > radius];
 
     if (keep.every((k) => k)) return [stroke];
