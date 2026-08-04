@@ -3260,6 +3260,13 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       return;
     }
 
+    // 가리개 해제는 _drawingEnabled 와 무관하게 항상 동작 (onPointerDown에서도)
+    if (_maskErasing) {
+      setState(() => _eraserScreenPos = event.localPosition);
+      _drawing.eraseMaskAt(pos, _eraserSize * 2);
+      return;
+    }
+
     // 드로잉 비활성 상태 → 이미지 편집 중이면 빈 캔버스 탭으로 해제
     if (!_drawingEnabled) {
       if (_imageSelected) {
@@ -4023,13 +4030,15 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
       }
 
       // 이미지 터치 영역
-      // 고정 상태(isSelected=false)일 때는 translucent → 펜/터치가 Listener까지 통과
+      // 가리개 해제 모드이면 항상 translucent → Listener까지 통과
+      // 고정 상태(isSelected=false)일 때도 translucent
+      final maskEraseActive = _maskErasing;
       widgets.add(Positioned(
         left: rect.left, top: rect.top, width: rect.width, height: rect.height,
         child: GestureDetector(
-          behavior: isSelected ? HitTestBehavior.opaque : HitTestBehavior.translucent,
-          onPanUpdate: isSelected ? (d) => _moveImage(d.delta) : null,
-          onLongPress: () => setState(() { _imageSelected = true; _selectedImageIndex = i; }),
+          behavior: (isSelected && !maskEraseActive) ? HitTestBehavior.opaque : HitTestBehavior.translucent,
+          onPanUpdate: (isSelected && !maskEraseActive) ? (d) => _moveImage(d.delta) : null,
+          onLongPress: maskEraseActive ? null : () => setState(() { _imageSelected = true; _selectedImageIndex = i; }),
           child: Container(
             decoration: BoxDecoration(
               border: isSelected ? Border.all(color: Colors.blue.withValues(alpha: 0.7), width: 2) : null,
