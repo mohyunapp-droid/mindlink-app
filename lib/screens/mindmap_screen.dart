@@ -3523,14 +3523,16 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                   child: Row(
                     children: [
                       _toolBtn(context, icon: Icons.edit, label: '자유 필기',
-                        active: _drawingEnabled && !_erasing && !_straightLine,
+                        active: _drawingEnabled && !_erasing && !_straightLine && !_masking,
                         onTap: () => setState(() {
                           _imageSelected = false; _selectedImageIndex = -1;
                           _lassoMode = false; _lassoState.reset();
-                          if (_drawingEnabled && !_erasing && !_straightLine) {
+                          if (_drawingEnabled && !_erasing && !_straightLine && !_masking) {
                             _drawingEnabled = false;
                           } else {
                             _drawingEnabled = true; _erasing = false; _straightLine = false;
+                            _masking = false; _maskErasing = false; _highlighting = false;
+                            _strokeWidth = 2.0;
                           }
                         }),
                       ),
@@ -3543,7 +3545,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _drawingEnabled = false;
                           } else {
                             _drawingEnabled = true; _erasing = false; _straightLine = true;
-                            _strokeWidth = 2.0; // 직선: 가장 얇게
+                            _masking = false; _maskErasing = false; _highlighting = false;
+                            _strokeWidth = 2.0;
                           }
                         }),
                       ),
@@ -3553,8 +3556,14 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                         onTap: () => setState(() {
                           _imageSelected = false; _selectedImageIndex = -1;
                           _lassoMode = false; _lassoState.reset();
-                          if (!_highlighting) _strokeWidth = 2.0; // 형광펜: 가장 얇게
-                          _highlighting = !_highlighting;
+                          if (!_highlighting) {
+                            _highlighting = true;
+                            _erasing = false; _masking = false; _maskErasing = false;
+                            _straightLine = true;
+                            _strokeWidth = 2.0;
+                          } else {
+                            _highlighting = false;
+                          }
                         }),
                       ),
                       _toolBtn(context, icon: Icons.auto_fix_normal, label: '지우개',
@@ -3565,8 +3574,9 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                           if (_drawingEnabled && _erasing) {
                             _drawingEnabled = false;
                           } else {
-                            _drawingEnabled = true; _erasing = true; _straightLine = false; _highlighting = false;
-                            _eraserSize = 8.0; // 지우개: 가장 작게
+                            _drawingEnabled = true; _erasing = true; _straightLine = true;
+                            _masking = false; _maskErasing = false; _highlighting = false;
+                            _eraserSize = 8.0;
                           }
                         }),
                       ),
@@ -3608,8 +3618,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _erasing = false;
                             _highlighting = false;
                             _drawingEnabled = true;
-                            _straightLine = false;
-                            _strokeWidth = 2.0; // 가리개: 가장 얇게
+                            _straightLine = true;
+                            _strokeWidth = 2.0;
                           }
                         }),
                       ),
@@ -3629,7 +3639,8 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _erasing = false;
                             _highlighting = false;
                             _drawingEnabled = false;
-                            _eraserSize = 8.0; // 가리개 해제: 가장 작게
+                            _straightLine = true;
+                            _eraserSize = 8.0;
                           }
                         }),
                       ),
