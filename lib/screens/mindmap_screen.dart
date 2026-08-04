@@ -3576,7 +3576,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                           } else {
                             _drawingEnabled = true; _erasing = true; _straightLine = true;
                             _masking = false; _maskErasing = false; _highlighting = false;
-                            _eraserSize = 8.0;
+                            _eraserSize = 2.0;
                           }
                         }),
                       ),
@@ -3640,7 +3640,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _highlighting = false;
                             _drawingEnabled = false;
                             _straightLine = true;
-                            _eraserSize = 8.0;
+                            _eraserSize = 2.0;
                           }
                         }),
                       ),
@@ -3832,7 +3832,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
 
   Widget _buildEraserSizeRow(BuildContext context) {
     // 지우개 반지름 옵션 (캔버스 단위)
-    const sizes = [8.0, 16.0, 28.0, 48.0, 80.0];
+    const sizes = [2.0, 8.0, 16.0, 28.0, 48.0];
     return Row(
       children: [
         const Icon(Icons.circle_outlined, size: 13, color: Colors.grey),
