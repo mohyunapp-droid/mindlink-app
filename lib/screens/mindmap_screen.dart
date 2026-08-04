@@ -3543,6 +3543,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _drawingEnabled = false;
                           } else {
                             _drawingEnabled = true; _erasing = false; _straightLine = true;
+                            _strokeWidth = 2.0; // 직선: 가장 얇게
                           }
                         }),
                       ),
@@ -3552,6 +3553,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                         onTap: () => setState(() {
                           _imageSelected = false; _selectedImageIndex = -1;
                           _lassoMode = false; _lassoState.reset();
+                          if (!_highlighting) _strokeWidth = 2.0; // 형광펜: 가장 얇게
                           _highlighting = !_highlighting;
                         }),
                       ),
@@ -3564,6 +3566,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _drawingEnabled = false;
                           } else {
                             _drawingEnabled = true; _erasing = true; _straightLine = false; _highlighting = false;
+                            _eraserSize = 8.0; // 지우개: 가장 작게
                           }
                         }),
                       ),
@@ -3606,6 +3609,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _highlighting = false;
                             _drawingEnabled = true;
                             _straightLine = false;
+                            _strokeWidth = 2.0; // 가리개: 가장 얇게
                           }
                         }),
                       ),
@@ -3625,6 +3629,7 @@ class _NoteEditorScreenState extends State<_NoteEditorScreen> {
                             _erasing = false;
                             _highlighting = false;
                             _drawingEnabled = false;
+                            _eraserSize = 8.0; // 가리개 해제: 가장 작게
                           }
                         }),
                       ),
